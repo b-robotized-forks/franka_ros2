@@ -30,9 +30,10 @@ constexpr unsigned int kMaxNumberOfElbowCommands = 2;
 constexpr unsigned int kMaxNumberOfCartesianPoseCommands = 16;
 
 Robot::Robot(std::unique_ptr<franka::Robot> robot, std::unique_ptr<Model> model)
-    : robot_(std::move(robot)), franka_hardware_model_(std::move(model)) {}
+    : robot_(std::move(robot)), franka_hardware_model_(std::move(model)), logger_(rclcpp::get_logger("franka_hw_interface")) {}
 
-Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) {
+Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) : logger_(logger)
+{
   franka::RealtimeConfig rt_config = franka::RealtimeConfig::kEnforce;
   if (!franka::hasRealtimeKernel()) {
     rt_config = franka::RealtimeConfig::kIgnore;
@@ -47,6 +48,7 @@ Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) {
   robot_ = std::make_unique<franka::Robot>(robot_ip, rt_config);
   model_ = std::make_unique<franka::Model>(robot_->loadModel());
   franka_hardware_model_ = std::make_unique<Model>(model_.get());
+
 }
 
 Robot::~Robot() {
@@ -54,6 +56,22 @@ Robot::~Robot() {
 }
 
 franka::RobotState Robot::readOnce() {
+  
+  if (pause_read_requested_.load()) {
+    std::unique_lock<std::mutex> sync_lock(read_sync_mutex_);
+    
+    // Signal we are pausing
+    read_is_paused_ = true;
+    read_sync_cv_.notify_all(); 
+    
+    // WAIT here until the guard is destroyed
+    read_sync_cv_.wait(sync_lock, [this]{ return !pause_read_requested_.load(); });
+    
+    read_is_paused_ = false;
+    // Return cached state to keep the loop valid
+    return current_state_;
+  }
+
   std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
   if (!active_control_) {
     current_state_ = robot_->readOnce();
@@ -63,7 +81,27 @@ franka::RobotState Robot::readOnce() {
   return current_state_;
 }
 
+void Robot::pauseBlockingRead() {
+  RCLCPP_INFO(logger_, "[Guard] Requesting read pause...");
+  pause_read_requested_.store(true);
+  
+  // Wait for the read loop to actually yield
+  std::unique_lock<std::mutex> lock(read_sync_mutex_);
+  read_sync_cv_.wait(lock, [this]{ return read_is_paused_; });
+  RCLCPP_INFO(logger_, "[Guard] Read loop paused. Mutex free.");
+}
+
+void Robot::resumeBlockingRead() {
+  RCLCPP_INFO(logger_, "[Guard] Resuming read loop...");
+  {
+    std::lock_guard<std::mutex> lock(read_sync_mutex_);
+    pause_read_requested_.store(false);
+  }
+  read_sync_cv_.notify_all();
+}
+
 void Robot::stopRobot() {
+ 
   if (active_control_) {
     effort_interface_active_ = false;
     joint_velocity_interface_active_ = false;
@@ -72,9 +110,14 @@ void Robot::stopRobot() {
     cartesian_pose_interface_active_ = false;
     active_control_.reset();
   }
+  RCLCPP_INFO(logger_, "[DEBUG] stopRobot END");
 }
 
 void Robot::writeOnce(const std::vector<double>& command) {
+  if (is_controller_switching_.load()){
+    return;
+  }
+
   if (!active_control_) {
     throw std::runtime_error("Control hasn't been started");
   }
@@ -302,19 +345,28 @@ franka_hardware::Model* Robot::getModel() {
 }
 
 void Robot::initializeTorqueInterface() {
+  RCLCPP_INFO(logger_, "[DEBUG] initializeTorqueInterface START");
   try {
     active_control_ = robot_->startTorqueControl();
+  } catch (const franka::InvalidOperationException& e) {
+    RCLCPP_INFO(logger_, "initializeTorqueInterface: InvalidOperationException - Mutex contention detected!" );
+    throw;
   } catch (const franka::ControlException& e) {
     robot_->automaticErrorRecovery();
     active_control_ = robot_->startTorqueControl();
   }
   effort_interface_active_ = true;
+  RCLCPP_INFO(logger_, "[DEBUG] initializeTorqueInterface END");
 }
 
 void Robot::initializeJointVelocityInterface() {
+  RCLCPP_INFO(logger_, "[DEBUG] initializeJointVelocityInterface START");
   try {
     active_control_ = robot_->startJointVelocityControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
+  } catch (const franka::InvalidOperationException& e) {
+    RCLCPP_INFO(logger_, "initializeJointVelocityInterface: InvalidOperationException - Mutex contention detected!" );
+    throw;
   } catch (const franka::ControlException& e) {
     robot_->automaticErrorRecovery();
     active_control_ = robot_->startJointVelocityControl(
@@ -322,12 +374,17 @@ void Robot::initializeJointVelocityInterface() {
   }
 
   joint_velocity_interface_active_ = true;
+  RCLCPP_INFO(logger_, "[DEBUG] initializeJointVelocityInterface END");
 }
 
 void Robot::initializeJointPositionInterface() {
+  RCLCPP_INFO(logger_, "[DEBUG] initializeJointPositionInterface START");
   try {
     active_control_ = robot_->startJointPositionControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
+  } catch (const franka::InvalidOperationException& e) {
+    RCLCPP_INFO(logger_, "initializeJointPositionInterface: InvalidOperationException - Mutex contention detected!" );
+    throw;
   } catch (const franka::ControlException& e) {
     robot_->automaticErrorRecovery();
     active_control_ = robot_->startJointPositionControl(
@@ -335,49 +392,65 @@ void Robot::initializeJointPositionInterface() {
   }
 
   joint_position_interface_active_ = true;
+  RCLCPP_INFO(logger_, "[DEBUG] initializeJointPositionInterface END");
 }
 
 void Robot::initializeCartesianVelocityInterface() {
+  RCLCPP_INFO(logger_, "[DEBUG] initializeCartesianVelocityInterface START");
   try {
     active_control_ = robot_->startCartesianVelocityControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
+  } catch (const franka::InvalidOperationException& e) {
+    RCLCPP_INFO(logger_, "initializeCartesianVelocityInterface: InvalidOperationException - Mutex contention detected!" );
+    throw;
   } catch (const franka::ControlException& e) {
     robot_->automaticErrorRecovery();
     active_control_ = robot_->startCartesianVelocityControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
   }
   cartesian_velocity_interface_active_ = true;
+  RCLCPP_INFO(logger_, "[DEBUG] initializeCartesianVelocityInterface END");
 }
 
 void Robot::initializeCartesianPoseInterface() {
+  RCLCPP_INFO(logger_, "[DEBUG] initializeCartesianPoseInterface START");
   try {
     active_control_ = robot_->startCartesianPoseControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
+  } catch (const franka::InvalidOperationException& e) {
+    RCLCPP_INFO(logger_, "initializeCartesianPoseInterface: InvalidOperationException - Mutex contention detected!" );
+    throw;
   } catch (const franka::ControlException& e) {
     robot_->automaticErrorRecovery();
     active_control_ = robot_->startCartesianPoseControl(
         research_interface::robot::Move::ControllerMode::kJointImpedance);
   }
   cartesian_pose_interface_active_ = true;
+  RCLCPP_INFO(logger_, "[DEBUG] initializeCartesianPoseInterface END");
 }
 
 void Robot::setJointStiffness(const franka_msgs::srv::SetJointStiffness::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setJointStiffness START");
   std::lock_guard<std::mutex> lock(write_mutex_);
   std::array<double, 7> joint_stiffness{};
   std::copy(req->joint_stiffness.cbegin(), req->joint_stiffness.cend(), joint_stiffness.begin());
   robot_->setJointImpedance(joint_stiffness);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setJointStiffness END");
 }
 
 void Robot::setCartesianStiffness(
     const franka_msgs::srv::SetCartesianStiffness::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setCartesianStiffness START");
   std::lock_guard<std::mutex> lock(write_mutex_);
   std::array<double, 6> cartesian_stiffness{};
   std::copy(req->cartesian_stiffness.cbegin(), req->cartesian_stiffness.cend(),
             cartesian_stiffness.begin());
   robot_->setCartesianImpedance(cartesian_stiffness);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setCartesianStiffness END");
 }
 
 void Robot::setLoad(const franka_msgs::srv::SetLoad::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setLoad START");
   std::lock_guard<std::mutex> lock(write_mutex_);
   double mass(req->mass);
   std::array<double, 3> center_of_mass{};  // NOLINT [readability-identifier-naming]
@@ -386,27 +459,33 @@ void Robot::setLoad(const franka_msgs::srv::SetLoad::Request::SharedPtr& req) {
   std::copy(req->load_inertia.cbegin(), req->load_inertia.cend(), load_inertia.begin());
 
   robot_->setLoad(mass, center_of_mass, load_inertia);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setLoad END");
 }
 
 void Robot::setTCPFrame(const franka_msgs::srv::SetTCPFrame::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setTCPFrame START");
   std::lock_guard<std::mutex> lock(write_mutex_);
 
   std::array<double, 16> transformation{};  // NOLINT [readability-identifier-naming]
   std::copy(req->transformation.cbegin(), req->transformation.cend(), transformation.begin());
   robot_->setEE(transformation);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setTCPFrame END");
 }
 
 void Robot::setStiffnessFrame(const franka_msgs::srv::SetStiffnessFrame::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setStiffnessFrame START");
   std::lock_guard<std::mutex> lock(write_mutex_);
 
   std::array<double, 16> transformation{};
   std::copy(req->transformation.cbegin(), req->transformation.cend(), transformation.begin());
   robot_->setK(transformation);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setStiffnessFrame END");
 }
 
 void Robot::setForceTorqueCollisionBehavior(
     const franka_msgs::srv::SetForceTorqueCollisionBehavior::Request::SharedPtr& req) {
   std::lock_guard<std::mutex> lock(write_mutex_);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setForceTorqueCollisionBehavior START");
 
   std::array<double, 7> lower_torque_thresholds_nominal{};
   std::copy(req->lower_torque_thresholds_nominal.cbegin(),
@@ -423,10 +502,12 @@ void Robot::setForceTorqueCollisionBehavior(
 
   robot_->setCollisionBehavior(lower_torque_thresholds_nominal, upper_torque_thresholds_nominal,
                                lower_force_thresholds_nominal, upper_force_thresholds_nominal);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setForceTorqueCollisionBehavior END");
 }
 
 void Robot::setFullCollisionBehavior(
     const franka_msgs::srv::SetFullCollisionBehavior::Request::SharedPtr& req) {
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setFullCollisionBehavior START");
   std::lock_guard<std::mutex> lock(write_mutex_);
 
   std::array<double, 7> lower_torque_thresholds_acceleration{};
@@ -462,10 +543,13 @@ void Robot::setFullCollisionBehavior(
       lower_torque_thresholds_nominal, upper_torque_thresholds_nominal,
       lower_force_thresholds_acceleration, upper_force_thresholds_acceleration,
       lower_force_thresholds_nominal, upper_force_thresholds_nominal);
+  RCLCPP_INFO(logger_, "[DEBUG] Service: setFullCollisionBehavior END");
 }
 
 void Robot::automaticErrorRecovery() {
+  RCLCPP_INFO(logger_, "[DEBUG] automaticErrorRecovery START");
   robot_->automaticErrorRecovery();
+  RCLCPP_INFO(logger_, "[DEBUG] automaticErrorRecovery END");
 }
 
 }  // namespace franka_hardware

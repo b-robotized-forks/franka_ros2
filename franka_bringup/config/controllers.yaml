@@ -37,6 +37,8 @@
         type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
         state_interfaces:
           robot_state
+      franka_joint_trajectory_controller:
+        type: joint_trajectory_controller/JointTrajectoryController
 
       gravity_compensation_example_controller:
         type: franka_example_controllers/GravityCompensationExampleController

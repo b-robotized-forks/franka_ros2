@@ -22,6 +22,7 @@
 #include <realtime_tools/mutex.hpp>
 #include <string>
 #include <thread>
+#include <condition_variable>
 
 #include <franka/active_control.h>
 #include <franka/active_control_base.h>
@@ -44,6 +45,32 @@
 
 namespace franka_hardware {
 
+/*
+* RAII object for pausing the read() loop until `perform_command_mode_switch()` 
+* from a separate thread finishes. This exists to avoid mutex contentions.
+*/
+class ROS2CommandModeSwitchScopedPause {
+public:
+
+  explicit ROS2CommandModeSwitchScopedPause(std::shared_ptr<Robot> robot) : robot_(std::move(robot)) {
+    if (robot_) {
+      robot_->stopBackgroundRead();
+    }
+  }
+
+  ~ROS2CommandModeSwitchScopedPause() {
+    if (robot_) {
+      robot_->startBackgroundRead();
+    }
+  }
+
+  ROS2CommandModeSwitchScopedPause(const ROS2CommandModeSwitchScopedPause&) = delete;
+  ROS2CommandModeSwitchScopedPause& operator=(const ROS2CommandModeSwitchScopedPause&) = delete;
+
+private:
+  std::shared_ptr<Robot> robot_;
+};
+
 class Robot {
  public:
   /**
@@ -61,6 +88,7 @@ class Robot {
    * @param[im] logger ROS Logger to print eventual warnings.
    */
   explicit Robot(const std::string& robot_ip, const rclcpp::Logger& logger);
+  Robot() : logger_(rclcpp::get_logger("franka_robot_default")) {}
   Robot(const Robot&) = delete;
   Robot& operator=(const Robot& other) = delete;
   Robot& operator=(Robot&& other) = delete;
@@ -86,6 +114,10 @@ class Robot {
 
   /// Stops the continuous communication read with the connected robot
   virtual void stopRobot();
+
+
+  void pauseBlockingRead();
+  void resumeBlockingRead();
 
   /**
    * Get the current robot state
@@ -316,13 +348,22 @@ class Robot {
    */
   franka::CartesianPose preProcessCartesianPose(const franka::CartesianPose& cartesian_pose);
 
+  void setControllerIsSwitching(bool switching) { controller_switch_pending_.store(switching) }
+
   std::mutex write_mutex_;
   realtime_tools::prio_inherit_mutex control_mutex_;
 
-  std::shared_ptr<franka::Robot> robot_;
+  // perform_command_mode_switch synchronization members
+  std::mutex read_sync_mutex_;
+  std::condition_variable read_sync_cv_;
+  std::atomic<bool> pause_read_requested_{false};
+  bool read_is_paused_{false};
+
+  std::unique_ptr<franka::Robot> robot_;
   std::unique_ptr<franka::ActiveControlBase> active_control_ = nullptr;
   std::unique_ptr<franka::Model> model_;
   std::unique_ptr<Model> franka_hardware_model_;
+  rclcpp::Logger logger_;
 
   bool effort_interface_active_{false};
   bool joint_velocity_interface_active_{false};

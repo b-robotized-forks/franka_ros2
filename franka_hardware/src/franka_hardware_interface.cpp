@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <chrono>
 
 #include <franka/exception.h>
 #include <franka/logging/logger.hpp>
@@ -242,7 +243,6 @@ void FrankaHardwareInterface::initializePositionCommands(const franka::RobotStat
 
 hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time& /*time*/,
                                                               const rclcpp::Duration& /*period*/) {
-  std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
   if (hw_franka_model_ptr_ == nullptr) {
     hw_franka_model_ptr_ = robot_->getModel();
   }
@@ -251,6 +251,15 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
   try {
     // Write new state into the RealtimeBuffer for thread-safe access by consumers
     robot_state = robot_->readOnce();
+    if (consecutive_skips_ > 0) consecutive_skips_ = 0;
+  } catch (const franka::InvalidOperationException& e) {
+    // Mutex contention during mode switch, as we're running the controller manager in Scheduler thread, and this is in non-rt thread.
+    // Return OK to skip this read cycle and keep the controller manager alive.
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING READ CYCLE %zu due to mutex!", consecutive_skips_);
+    }
+    return hardware_interface::return_type::OK;
   } catch (const franka::ControlException& e) {
     RCLCPP_ERROR(getLogger(), "%s", e.what());
     robot_->stopRobot();
@@ -316,15 +325,25 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
       case ControlInterface::None:
         break;
     }
+  } catch (const franka::InvalidOperationException& e) {
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to mutex!", consecutive_skips_);
+    }
+    // Thrown if mutex is contended during write setup.
+    return hardware_interface::return_type::OK;
   } catch (const std::runtime_error& e) {
     // Transient race during mode switch — the RT write() can overlap with
     // perform_command_mode_switch on the non-RT thread.  Warn instead of
     // returning ERROR so the controller_manager does not cascade-deactivate
     // all hardware and controllers.
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to active_control_=null!", consecutive_skips_);
+    }
     RCLCPP_WARN(getLogger(), "Write skipped during mode switch: %s", e.what());
+    return hardware_interface::return_type::OK;
   }
-
-  return hardware_interface::return_type::OK;
 }
 
 CallbackReturn FrankaHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
@@ -423,7 +442,9 @@ rclcpp::Logger FrankaHardwareInterface::getLogger() {
 hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_switch(
     const std::vector<std::string>& /*start_interfaces*/,
     const std::vector<std::string>& /*stop_interfaces*/) {
-  std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+
+  ROS2CommandModeSwitchScopedPause scoped_pause(robot_);
+  RCLCPP_INFO(getLogger(), "[DEBUG] perform_command_mode_switch START");
 
   if (elbow_command_interface_claimed_ &&
       !(velocity_cartesian_interface_claimed_ || pose_cartesian_interface_claimed_)) {
@@ -431,6 +452,9 @@ hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_sw
                  "Elbow cannot be commanded without cartesian velocity or pose interface");
     return hardware_interface::return_type::ERROR;
   }
+  RCLCPP_INFO(getLogger(), "[DEBUG] perform_command_mode_switch: END");
+
+  robot_->setControllerIsSwitching(false);
 
   ControlInterface desired = ControlInterface::None;
 
@@ -563,7 +587,7 @@ hardware_interface::return_type FrankaHardwareInterface::prepare_command_mode_sw
                              interface.size);
     }
   }
-
+  RCLCPP_INFO(getLogger(), "[DEBUG] prepare_command_mode_switch: END");
   return hardware_interface::return_type::OK;
 }
 }  // namespace franka_hardware
