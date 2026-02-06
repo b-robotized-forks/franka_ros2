@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <chrono>
 
 #include <franka/exception.h>
 #include <hardware_interface/handle.hpp>
@@ -164,7 +165,21 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
   if (hw_franka_model_ptr_ == nullptr) {
     hw_franka_model_ptr_ = robot_->getModel();
   }
-  hw_franka_robot_state_ = robot_->readOnce();
+
+  try {
+    hw_franka_robot_state_ = robot_->readOnce();
+    if (consecutive_skips_ > 0) consecutive_skips_ = 0;
+
+  } catch (const franka::InvalidOperationException& e) {
+    // Mutex contention during mode switch, as we're running the controller manager in Scheduler thread, and this is in non-rt thread.
+    // Return OK to skip this read cycle and keep the controller manager alive.
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING READ CYCLE %d due to mutex!", consecutive_skips_);
+    }
+    return hardware_interface::return_type::OK;
+  }
+
   robot_time_state_ = hw_franka_robot_state_.time.toSec();
   initializePositionCommands(hw_franka_robot_state_);
 
@@ -191,28 +206,38 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     return hardware_interface::return_type::ERROR;
   }
 
-  if (velocity_joint_interface_running_) {
-    robot_->writeOnce(hw_velocity_commands_);
-  } else if (effort_interface_running_) {
-    robot_->writeOnce(hw_effort_commands_);
-  } else if (position_joint_interface_running_ && !first_position_update_) {
-    robot_->writeOnce(hw_position_commands_);
-  } else if (velocity_cartesian_interface_running_ && elbow_command_interface_running_ &&
-             !first_elbow_update_) {
-    // Wait until the first read pass after robot controller is activated to write the elbow
-    // command to the robot
-    robot_->writeOnce(hw_cartesian_velocities_, hw_elbow_command_);
-  } else if (pose_cartesian_interface_running_ && elbow_command_interface_running_ &&
-             !first_cartesian_pose_update_ && !first_elbow_update_) {
-    // Wait until the first read pass after robot controller is activated to write the elbow
-    // command to the robot
-    robot_->writeOnce(hw_cartesian_pose_commands_, hw_elbow_command_);
-  } else if (pose_cartesian_interface_running_ && !first_cartesian_pose_update_) {
-    // Wait until the first read pass after robot controller is activated to write the cartesian
-    // pose
-    robot_->writeOnce(hw_cartesian_pose_commands_);
-  } else if (velocity_cartesian_interface_running_ && !elbow_command_interface_running_) {
-    robot_->writeOnce(hw_cartesian_velocities_);
+  try {
+    if (velocity_joint_interface_running_) {
+      robot_->writeOnce(hw_velocity_commands_);
+    } else if (effort_interface_running_) {
+      robot_->writeOnce(hw_effort_commands_);
+    } else if (position_joint_interface_running_ && !first_position_update_) {
+      robot_->writeOnce(hw_position_commands_);
+    } else if (velocity_cartesian_interface_running_ && elbow_command_interface_running_ &&
+              !first_elbow_update_) {
+      robot_->writeOnce(hw_cartesian_velocities_, hw_elbow_command_);
+    } else if (pose_cartesian_interface_running_ && elbow_command_interface_running_ &&
+              !first_cartesian_pose_update_ && !first_elbow_update_) {
+      robot_->writeOnce(hw_cartesian_pose_commands_, hw_elbow_command_);
+    } else if (pose_cartesian_interface_running_ && !first_cartesian_pose_update_) {
+      robot_->writeOnce(hw_cartesian_pose_commands_);
+    } else if (velocity_cartesian_interface_running_ && !elbow_command_interface_running_) {
+      robot_->writeOnce(hw_cartesian_velocities_);
+    }
+  } catch (const std::runtime_error& e) {
+    // Thrown if active_control_ is null, as robotStop() is called during the switch.
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %d due to active_control_=null!", consecutive_skips_);
+    }
+    return hardware_interface::return_type::OK;
+  } catch (const franka::InvalidOperationException& e) {
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %d due to mutex!", consecutive_skips_);
+    }
+    // Thrown if mutex is contended during write setup.
+    return hardware_interface::return_type::OK;
   }
 
   return hardware_interface::return_type::OK;
@@ -310,6 +335,12 @@ rclcpp::Logger FrankaHardwareInterface::getLogger() {
 hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_switch(
     const std::vector<std::string>& /*start_interfaces*/,
     const std::vector<std::string>& /*stop_interfaces*/) {
+  RCLCPP_INFO(getLogger(), "[DEBUG] perform_command_mode_switch START");
+
+  ROS2CommandModeSwitchScopedPause scoped_pause(robot_);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
   if (!effort_interface_running_ && effort_interface_claimed_) {
     hw_effort_commands_.fill(0);
     robot_->stopRobot();
@@ -386,6 +417,9 @@ hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_sw
                  "Elbow cannot be commanded without cartesian velocity or pose interface");
     return hardware_interface::return_type::ERROR;
   }
+  RCLCPP_INFO(getLogger(), "[DEBUG] perform_command_mode_switch: END");
+
+  robot_->setControllerIsSwitching(false);
 
   return hardware_interface::return_type::OK;
 }
@@ -439,7 +473,7 @@ hardware_interface::return_type FrankaHardwareInterface::prepare_command_mode_sw
                              interface.size);
     }
   }
-
+  RCLCPP_INFO(getLogger(), "[DEBUG] prepare_command_mode_switch: END");
   return hardware_interface::return_type::OK;
 }
 }  // namespace franka_hardware

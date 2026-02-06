@@ -159,7 +159,8 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
 
   bool elbow_command_interface_claimed_ = false;
   bool elbow_command_interface_running_ = false;
-
+ 
+  size_t consecutive_skips_ = 0;
   static rclcpp::Logger getLogger();
 
   std::string arm_id_{"panda"};
