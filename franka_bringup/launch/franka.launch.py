@@ -117,57 +117,7 @@ def generate_robot_nodes(context):
             namespace=namespace,
             parameters=[{'robot_description': robot_description}],
             output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='ros2_control_node',
-            namespace=namespace,
-            parameters=[
-                controllers_yaml,
-                {'robot_description': robot_description},
-                {'load_gripper': load_gripper}],
-            remappings=[('joint_states', joint_state_publisher_sources[0])],
-            output='screen',
-            on_exit=Shutdown(),
-        ),
-        Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            namespace=namespace,
-            parameters=[{
-                'source_list': joint_state_publisher_sources,
-                'rate': joint_state_rate,
-                'use_robot_description': False,
-            }],
-            output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            namespace=namespace,
-            arguments=['joint_state_broadcaster'],
-            output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            namespace=namespace,
-            arguments=['franka_robot_state_broadcaster'],
-            parameters=[{'arm_id': LaunchConfiguration('arm_id').perform(context)}],
-            condition=UnlessCondition(LaunchConfiguration('use_fake_hardware')),
-            output='screen',
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([PathJoinSubstitution(
-                [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
-            launch_arguments={
-                'namespace': namespace,
-                'robot_ip': LaunchConfiguration('robot_ip').perform(context),
-                'use_fake_hardware': LaunchConfiguration('use_fake_hardware').perform(context),
-            }.items(),
-            condition=IfCondition(LaunchConfiguration('load_gripper')),
-        ),
+        )
     ]
 
     return nodes

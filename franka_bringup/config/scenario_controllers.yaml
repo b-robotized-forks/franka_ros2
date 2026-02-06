@@ -1,0 +1,243 @@
+
+b_controlled_box_cm:
+  ros__parameters:
+    update_rate: 1000  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    dummy_jsb:
+      type: joint_state_broadcaster_dummy/JointStateBroadcaster
+
+    pssbl_joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    franka_robot_state_broadcaster:
+      type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
+
+    franka_joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    kuka_joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    pssbl_joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    ur_joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    tool_controller:
+      type: gpio_tool_controller/GpioToolController
+
+    gripper_position_controller_right:
+      type: parallel_gripper_action_controller/GripperActionController
+
+    semaphore_controller:
+      type: forward_command_controller/MultiInterfaceForwardCommandController
+
+dummy_jsb:
+  ros__parameters:
+    type: joint_state_broadcaster_dummy/JointStateBroadcaster
+    update_rate: 1000
+
+joint_state_broadcaster:
+  ros__parameters:
+    type: joint_state_broadcaster/JointStateBroadcaster
+    update_rate: 1000
+
+pssbl_joint_state_broadcaster:
+  ros__parameters:
+    type: joint_state_broadcaster/JointStateBroadcaster
+    update_rate: 1000
+    joints:
+      - pssbl_orba6_1215_joint1
+      - pssbl_orba6_1215_joint2
+      - pssbl_orba6_1215_joint3
+      - pssbl_orba6_1215_joint4
+      - pssbl_orba6_1215_joint5
+      - pssbl_orba6_1215_joint6
+    interfaces:
+      - position
+
+
+franka_robot_state_broadcaster:
+  ros__parameters:
+    type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
+    update_rate: 1000
+    state_interfaces:
+      robot_state
+
+franka_joint_trajectory_controller:
+  ros__parameters:
+    type: joint_trajectory_controller/JointTrajectoryController
+    update_rate: 1000
+    command_interfaces:
+      - effort
+    state_interfaces:
+      - position
+      - velocity
+    joints:
+      - fr3_joint1
+      - fr3_joint2
+      - fr3_joint3
+      - fr3_joint4
+      - fr3_joint5
+      - fr3_joint6
+      - fr3_joint7
+    gains:
+      fr3_joint1: { p: 600., d: 30., i: 0., i_clamp: 1. }
+      fr3_joint2: { p: 600., d: 30., i: 0., i_clamp: 1. }
+      fr3_joint3: { p: 600., d: 30., i: 0., i_clamp: 1. }
+      fr3_joint4: { p: 600., d: 30., i: 0., i_clamp: 1. }
+      fr3_joint5: { p: 250., d: 10., i: 0., i_clamp: 1. }
+      fr3_joint6: { p: 150., d: 10., i: 0., i_clamp: 1. }
+      fr3_joint7: { p: 50., d: 5., i: 0., i_clamp: 1. }
+
+    state_publish_rate: 50.0 # Defaults to 50
+    action_monitor_rate: 20.0 # Defaults to 20
+
+    interpolate_from_desired_state: true
+    allow_partial_joints_goal: false # Defaults to false
+    constraints:
+      stopped_velocity_tolerance: 0.01 # Defaults to 0.01
+      goal_time: 0.0 # Defaults to 0.0 (start immediately)
+
+
+kuka_joint_trajectory_controller:
+  ros__parameters:
+    type: joint_trajectory_controller/JointTrajectoryController
+    update_rate: 250
+    joints:
+      - kr10r900_2_joint_a1
+      - kr10r900_2_joint_a2
+      - kr10r900_2_joint_a3
+      - kr10r900_2_joint_a4
+      - kr10r900_2_joint_a5
+      - kr10r900_2_joint_a6
+
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+
+    state_publish_rate: 2.0 # Defaults to 50
+    action_monitor_rate: 2.0 # Defaults to 20
+
+    interpolate_from_desired_state: true
+    allow_partial_joints_goal: false # Defaults to false
+    open_loop_control: true
+    allow_integration_in_goal_trajectories: true
+    constraints:
+      stopped_velocity_tolerance: 0.01 # Defaults to 0.01
+      goal_time: 0.0 # Defaults to 0.0 (start immediately)
+
+
+pssbl_joint_trajectory_controller:
+  ros__parameters:
+    type: joint_trajectory_controller/JointTrajectoryController
+    update_rate: 500
+    joints:
+      - pssbl_orba6_1215_joint1
+      - pssbl_orba6_1215_joint2
+      - pssbl_orba6_1215_joint3
+      - pssbl_orba6_1215_joint4
+      - pssbl_orba6_1215_joint5
+      - pssbl_orba6_1215_joint6
+
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+
+    state_publish_rate: 50.0 # Defaults to 50
+    action_monitor_rate: 20.0 # Defaults to 20
+
+    interpolate_from_desired_state: true
+    allow_partial_joints_goal: false # Defaults to false
+    constraints:
+      stopped_velocity_tolerance: 0.01 # Defaults to 0.01
+      goal_time: 0.0 # Defaults to 0.0 (start immediately)
+
+
+ur_joint_trajectory_controller:
+  ros__parameters:
+    type: joint_trajectory_controller/JointTrajectoryController
+    update_rate: 500
+    joints:
+        - shoulder_pan_joint
+        - shoulder_lift_joint
+        - elbow_joint
+        - wrist_1_joint
+        - wrist_2_joint
+        - wrist_3_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    interpolate_from_desired_state: true
+    allow_partial_joints_goal: false
+    constraints:
+      stopped_velocity_tolerance: 0.2
+      goal_time: 0.0
+      shoulder_pan_joint: {trajectory: 0.2, goal: 0.1}
+      shoulder_lift_joint: {trajectory: 0.2, goal: 0.1}
+      elbow_joint: {trajectory: 0.2, goal: 0.1}
+      wrist_1_joint: {trajectory: 0.2, goal: 0.1}
+      wrist_2_joint: {trajectory: 0.2, goal: 0.1}
+      wrist_3_joint: {trajectory: 0.2, goal: 0.1}
+    speed_scaling:
+      state_interface: peed_scaling/speed_scaling_factor
+      # Setting the command interface currently would clash with the io_and_status_controller
+      # This will probably be changed in the future.
+      # command_interface: $(var tf_prefix)speed_scaling/target_speed_fraction_cmd
+
+
+tool_controller:
+  ros__parameters:
+    type: gpio_tool_controller/GpioToolController
+    update_rate: 500
+    use_action: true
+    IDLE_recheck_state: false # will the controller check state only on requested change, or every loop in idle. Default: false
+    timeout: 5.0
+    tolerance: 0.01
+
+    disengaged:
+      name: 'disengaged'
+      command:
+        interfaces: ["orba6_gripper/engage", "orba6_gripper/disengage"]
+        values: [0.0, 1.0]
+      states:
+        interfaces: ["orba6_gripper/engage", "orba6_gripper/disengage", "orba6_gripper/part_present"]
+        values: [0.0, 1.0, 0.0]
+
+    possible_engaged_states: ['engaged_empty', 'engaged_part_present']
+
+    engaged:
+      name: 'engaged'
+      command:
+        interfaces: ["orba6_gripper/engage", "orba6_gripper/disengage"]
+        values: [1.0, 0.0]
+      states:
+        engaged_empty:
+          interfaces: ["orba6_gripper/engage", "orba6_gripper/disengage", "orba6_gripper/part_present"]
+          values: [1.0, 0.0, 0.0]
+        engaged_part_present:
+          interfaces: ["orba6_gripper/engage", "orba6_gripper/disengage", "orba6_gripper/part_present"]
+          values: [1.0, 0.0, 1.0]
+
+
+semaphore_controller:
+  ros__parameters:
+    type: forward_command_controller/MultiInterfaceForwardCommandController
+    update_rate: 50
+
+    joint: semaphore
+    interface_names:
+      - red
+      - yellow
+      - green
+      - siren
