@@ -44,32 +44,6 @@
 
 namespace franka_hardware {
 
-/*
-* RAII object for pausing the read() loop until `perform_command_mode_switch()` 
-* from a separate thread finishes. This exists to avoid mutex contentions.
-*/
-class ROS2CommandModeSwitchScopedPause {
-public:
-
-  explicit ROS2CommandModeSwitchScopedPause(std::shared_ptr<Robot> robot) : robot_(std::move(robot)) {
-    if (robot_) {
-      robot_->stopBackgroundRead();
-    }
-  }
-
-  ~ROS2CommandModeSwitchScopedPause() {
-    if (robot_) {
-      robot_->startBackgroundRead();
-    }
-  }
-
-  ROS2CommandModeSwitchScopedPause(const ROS2CommandModeSwitchScopedPause&) = delete;
-  ROS2CommandModeSwitchScopedPause& operator=(const ROS2CommandModeSwitchScopedPause&) = delete;
-
-private:
-  std::shared_ptr<Robot> robot_;
-};
-
 class Robot {
  public:
   /**
@@ -327,8 +301,6 @@ class Robot {
    */
   franka::CartesianPose preProcessCartesianPose(const franka::CartesianPose& cartesian_pose);
 
-  void setControllerIsSwitching(bool switching) { controller_switch_pending_.store(switching) }
-
   std::mutex write_mutex_;
   std::mutex control_mutex_;
 
@@ -366,4 +338,31 @@ class Robot {
 
   franka::RobotState current_state_;
 };
+
+/*
+* RAII object for pausing the read() loop until `perform_command_mode_switch()` 
+* from a separate thread finishes. This exists to avoid mutex contentions.
+*/
+class ROS2CommandModeSwitchScopedPause {
+public:
+
+  explicit ROS2CommandModeSwitchScopedPause(std::shared_ptr<Robot> robot) : robot_(std::move(robot)) {
+    if (robot_) {
+      robot_->pauseBlockingRead();
+    }
+  }
+
+  ~ROS2CommandModeSwitchScopedPause() {
+    if (robot_) {
+      robot_->resumeBlockingRead();
+    }
+  }
+
+  ROS2CommandModeSwitchScopedPause(const ROS2CommandModeSwitchScopedPause&) = delete;
+  ROS2CommandModeSwitchScopedPause& operator=(const ROS2CommandModeSwitchScopedPause&) = delete;
+
+private:
+  std::shared_ptr<Robot> robot_;
+};
+
 }  // namespace franka_hardware

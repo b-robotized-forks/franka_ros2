@@ -419,8 +419,6 @@ hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_sw
   }
   RCLCPP_INFO(getLogger(), "[DEBUG] perform_command_mode_switch: END");
 
-  robot_->setControllerIsSwitching(false);
-
   return hardware_interface::return_type::OK;
 }
 
