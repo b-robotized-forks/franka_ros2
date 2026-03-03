@@ -175,7 +175,7 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
     // Return OK to skip this read cycle and keep the controller manager alive.
     consecutive_skips_++;
     if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
-        RCLCPP_ERROR(getLogger(), "SKIPPING READ CYCLE %d due to mutex!", consecutive_skips_);
+        RCLCPP_ERROR(getLogger(), "SKIPPING READ CYCLE %zu due to mutex!", consecutive_skips_);
     }
     return hardware_interface::return_type::OK;
   }
@@ -224,19 +224,19 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     } else if (velocity_cartesian_interface_running_ && !elbow_command_interface_running_) {
       robot_->writeOnce(hw_cartesian_velocities_);
     }
+  } catch (const franka::InvalidOperationException& e) {
+    consecutive_skips_++;
+    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to mutex!", consecutive_skips_);
+    }
+    // Thrown if mutex is contended during write setup.
+    return hardware_interface::return_type::OK;
   } catch (const std::runtime_error& e) {
     // Thrown if active_control_ is null, as robotStop() is called during the switch.
     consecutive_skips_++;
     if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
-        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %d due to active_control_=null!", consecutive_skips_);
+        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to active_control_=null!", consecutive_skips_);
     }
-    return hardware_interface::return_type::OK;
-  } catch (const franka::InvalidOperationException& e) {
-    consecutive_skips_++;
-    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
-        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %d due to mutex!", consecutive_skips_);
-    }
-    // Thrown if mutex is contended during write setup.
     return hardware_interface::return_type::OK;
   }
 
