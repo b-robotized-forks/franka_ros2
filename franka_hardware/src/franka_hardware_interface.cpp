@@ -339,8 +339,6 @@ hardware_interface::return_type FrankaHardwareInterface::perform_command_mode_sw
 
   ROS2CommandModeSwitchScopedPause scoped_pause(robot_);
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(2));
-
   if (!effort_interface_running_ && effort_interface_claimed_) {
     hw_effort_commands_.fill(0);
     robot_->stopRobot();
