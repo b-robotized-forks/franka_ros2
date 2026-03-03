@@ -114,10 +114,7 @@ void Robot::stopRobot() {
 }
 
 void Robot::writeOnce(const std::vector<double>& command) {
-  if (is_controller_switching_.load()){
-    return;
-  }
-
+    
   if (!active_control_) {
     throw std::runtime_error("Control hasn't been started");
   }
