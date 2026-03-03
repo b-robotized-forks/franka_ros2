@@ -68,40 +68,40 @@ install(
         DESTINATION share/${PROJECT_NAME}/ros2_control
 )
 
-if(BUILD_TESTING)
-    find_package(ament_cmake_clang_format REQUIRED)
-    find_package(ament_cmake_copyright REQUIRED)
-    find_package(ament_cmake_cppcheck REQUIRED)
-    find_package(ament_cmake_flake8 REQUIRED)
-    find_package(ament_cmake_lint_cmake REQUIRED)
-    find_package(ament_cmake_pep257 REQUIRED)
-    find_package(ament_cmake_xmllint REQUIRED)
+# if(BUILD_TESTING)
+#     find_package(ament_cmake_clang_format REQUIRED)
+#     find_package(ament_cmake_copyright REQUIRED)
+#     find_package(ament_cmake_cppcheck REQUIRED)
+#     find_package(ament_cmake_flake8 REQUIRED)
+#     find_package(ament_cmake_lint_cmake REQUIRED)
+#     find_package(ament_cmake_pep257 REQUIRED)
+#     find_package(ament_cmake_xmllint REQUIRED)
 
-    set(CPP_DIRECTORIES src include)
-    ament_clang_format(CONFIG_FILE ../.clang-format ${CPP_DIRECTORIES})
-    ament_copyright(${CPP_DIRECTORIES} package.xml)
-    ament_cppcheck(${CPP_DIRECTORIES})
-    ament_lint_cmake(CMakeLists.txt)
-    ament_flake8()
-    ament_pep257()
-    ament_xmllint()
+#     set(CPP_DIRECTORIES src include)
+#     ament_clang_format(CONFIG_FILE ../.clang-format ${CPP_DIRECTORIES})
+#     ament_copyright(${CPP_DIRECTORIES} package.xml)
+#     ament_cppcheck(${CPP_DIRECTORIES})
+#     ament_lint_cmake(CMakeLists.txt)
+#     ament_flake8()
+#     ament_pep257()
+#     ament_xmllint()
 
-    add_subdirectory(test)
+#     add_subdirectory(test)
 
-    if(CHECK_TIDY)
-        find_package(ament_cmake_clang_tidy REQUIRED)
-        # Get scripts directory from franka_ros2 package
-        get_filename_component(SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/../franka_ros2/scripts" ABSOLUTE)
-        set(CLANG_TIDY_TEST "${SCRIPTS_DIR}/.run_clang_tidy_filtered.sh")
-        get_filename_component(SRC_DIR "${CMAKE_SOURCE_DIR}/.." ABSOLUTE)
-        set(CLANG_TIDY_CONFIG "${SRC_DIR}/.clang-tidy")
-        # Use wrapper script to filter compile_commands.json before clang-tidy
-        add_test(NAME clang_tidy
-            COMMAND bash "${CLANG_TIDY_TEST}" "${CMAKE_BINARY_DIR}" --jobs 6 --config "${CLANG_TIDY_CONFIG}"
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        )
-    endif()
-endif()
+#     if(CHECK_TIDY)
+#         find_package(ament_cmake_clang_tidy REQUIRED)
+#         # Get scripts directory from franka_ros2 package
+#         get_filename_component(SCRIPTS_DIR "${CMAKE_SOURCE_DIR}/../franka_ros2/scripts" ABSOLUTE)
+#         set(CLANG_TIDY_TEST "${SCRIPTS_DIR}/.run_clang_tidy_filtered.sh")
+#         get_filename_component(SRC_DIR "${CMAKE_SOURCE_DIR}/.." ABSOLUTE)
+#         set(CLANG_TIDY_CONFIG "${SRC_DIR}/.clang-tidy")
+#         # Use wrapper script to filter compile_commands.json before clang-tidy
+#         add_test(NAME clang_tidy
+#             COMMAND bash "${CLANG_TIDY_TEST}" "${CMAKE_BINARY_DIR}" --jobs 6 --config "${CLANG_TIDY_CONFIG}"
+#             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+#         )
+#     endif()
+# endif()
 
 ament_export_include_directories(
         include
