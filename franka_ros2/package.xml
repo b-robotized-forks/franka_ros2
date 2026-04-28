@@ -11,11 +11,7 @@
 
   <depend>franka_bringup</depend>
   <depend>franka_description</depend>
-  <depend>franka_example_controllers</depend>
   <depend>franka_fr3_moveit_config</depend>
-  <exec_depend>franka_gazebo_bringup</exec_depend>
-  <exec_depend>franka_gazebo_hardware</exec_depend>
-  <depend>gz_ros2_control</depend>
   <depend>franka_gripper</depend>
   <depend>franka_hardware</depend>
   <depend>franka_msgs</depend>
