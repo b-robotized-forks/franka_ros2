@@ -64,26 +64,26 @@ std::vector<StateInterface> FrankaHardwareInterface::export_state_interfaces() {
         StateInterface(info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &hw_efforts_.at(i)));
   }
 
-  state_interfaces.emplace_back(StateInterface(
-      arm_id_, k_robot_state_interface_name,
-      reinterpret_cast<double*>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-          &hw_franka_robot_state_addr_)));
-  state_interfaces.emplace_back(StateInterface(
-      arm_id_, k_robot_model_interface_name,
-      reinterpret_cast<double*>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-          &hw_franka_model_ptr_)));
+//   state_interfaces.emplace_back(StateInterface(
+//       arm_id_, k_robot_state_interface_name,
+//       reinterpret_cast<double*>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+//           &hw_franka_robot_state_addr_)));
+//   state_interfaces.emplace_back(StateInterface(
+//       arm_id_, k_robot_model_interface_name,
+//       reinterpret_cast<double*>(  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+//           &hw_franka_model_ptr_)));
 
-  // cartesian pose state interface 16 element pose matrix
-  for (auto i = 0U; i < 16; i++) {
-    state_interfaces.emplace_back(StateInterface(std::to_string(i), k_HW_IF_CARTESIAN_POSE_STATE,
-                                                 &cartesian_pose_state_.at(i)));
-  }
+//   // cartesian pose state interface 16 element pose matrix
+//   for (auto i = 0U; i < 16; i++) {
+//     state_interfaces.emplace_back(StateInterface(std::to_string(i), k_HW_IF_CARTESIAN_POSE_STATE,
+//                                                  &cartesian_pose_state_.at(i)));
+//   }
 
-  // elbow state interface
-  for (auto i = 0U; i < elbow_state_names_.size(); i++) {
-    state_interfaces.emplace_back(
-        StateInterface(elbow_state_names_.at(i), k_HW_IF_ELBOW_STATE, &elbow_state_.at(i)));
-  }
+//   // elbow state interface
+//   for (auto i = 0U; i < elbow_state_names_.size(); i++) {
+//     state_interfaces.emplace_back(
+//         StateInterface(elbow_state_names_.at(i), k_HW_IF_ELBOW_STATE, &elbow_state_.at(i)));
+//   }
 
   state_interfaces.emplace_back(StateInterface(arm_id_, "robot_time", &robot_time_state_));
 
@@ -102,24 +102,24 @@ std::vector<CommandInterface> FrankaHardwareInterface::export_command_interfaces
         info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_position_commands_.at(i)));
   }
 
-  // cartesian velocity command interface 6 in order: dx, dy, dz, wx, wy, wz
-  for (auto i = 0U; i < hw_cartesian_velocities_.size(); i++) {
-    command_interfaces.emplace_back(CommandInterface(hw_cartesian_velocities_names_.at(i),
-                                                     k_HW_IF_CARTESIAN_VELOCITY,
-                                                     &hw_cartesian_velocities_.at(i)));
-  }
+//   // cartesian velocity command interface 6 in order: dx, dy, dz, wx, wy, wz
+//   for (auto i = 0U; i < hw_cartesian_velocities_.size(); i++) {
+//     command_interfaces.emplace_back(CommandInterface(hw_cartesian_velocities_names_.at(i),
+//                                                      k_HW_IF_CARTESIAN_VELOCITY,
+//                                                      &hw_cartesian_velocities_.at(i)));
+//   }
 
-  // cartesian pose command interface 16 element pose matrix
-  for (auto i = 0U; i < 16; i++) {
-    command_interfaces.emplace_back(CommandInterface(
-        std::to_string(i), k_HW_IF_CARTESIAN_POSE_COMMAND, &hw_cartesian_pose_commands_.at(i)));
-  }
+//   // cartesian pose command interface 16 element pose matrix
+//   for (auto i = 0U; i < 16; i++) {
+//     command_interfaces.emplace_back(CommandInterface(
+//         std::to_string(i), k_HW_IF_CARTESIAN_POSE_COMMAND, &hw_cartesian_pose_commands_.at(i)));
+//   }
 
-  // elbow command interface
-  for (auto i = 0U; i < hw_elbow_command_names_.size(); i++) {
-    command_interfaces.emplace_back(CommandInterface(
-        hw_elbow_command_names_.at(i), k_HW_IF_ELBOW_COMMAND, &hw_elbow_command_.at(i)));
-  }
+//   // elbow command interface
+//   for (auto i = 0U; i < hw_elbow_command_names_.size(); i++) {
+//     command_interfaces.emplace_back(CommandInterface(
+//         hw_elbow_command_names_.at(i), k_HW_IF_ELBOW_COMMAND, &hw_elbow_command_.at(i)));
+//   }
 
   return command_interfaces;
 }
