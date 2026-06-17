@@ -22,6 +22,315 @@
 
 #include "franka_hardware/robot.hpp"
 
+
+// --- HACK BEGIN ---
+namespace {
+const std::string LEFT_ROBOT_URDF = R"RAW_URDF(
+<?xml version="1.0" ?>
+<!-- =================================================================================== -->
+<!-- |    This document is adapted for the left_robot instance (Dynamics Only)         | -->
+<!-- =================================================================================== -->
+<robot name="left_fp3">
+  <link name="left_base"/>
+  
+  <joint name="left_base_joint" type="fixed">
+    <parent link="left_base"/>
+    <child link="left_link0"/>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+  </joint>
+
+  <link name="left_link0"/>
+
+  <link name="left_link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0000004128 -0.0181251324 -0.0386035970"/>
+      <mass value="2.9274653454"/>
+      <inertia ixx="0.0186029651" ixy="1.3296e-05" ixz="-0.0001140944" iyy="0.0181195421" iyz="5.33017e-05" izz="0.0053883661"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.333"/>
+    <parent link="left_link0"/>
+    <child link="left_link1"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-2.7437" upper="2.7437" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.7437" soft_upper_limit="2.7437"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0031828864 -0.0743221644 0.0088146084"/>
+      <mass value="2.9355370338"/>
+      <inertia ixx="0.0248426123" ixy="0.0012852153" ixz="0.0047668011" iyy="0.0200510561" iyz="-0.0077993576" izz="0.0448935091"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint2" type="revolute">
+    <origin rpy="-1.570796326794897 0 0" xyz="0 0 0"/>
+    <parent link="left_link1"/>
+    <child link="left_link2"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-1.7837" upper="1.7837" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-1.7837" soft_upper_limit="1.7837"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0407015686 -0.0048200565 -0.0289730823"/>
+      <mass value="2.2449013699"/>
+      <inertia ixx="0.0206960046" ixy="0.0006503378" ixz="-0.0086867454" iyy="0.0129617222" iyz="-0.0046382675" izz="0.0083748603"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint3" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0 -0.316 0"/>
+    <parent link="left_link2"/>
+    <child link="left_link3"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-2.9007" upper="2.9007" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.9007" soft_upper_limit="2.9007"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0459100965 0.0630492960 -0.0085187868"/>
+      <mass value="2.6155955791"/>
+      <inertia ixx="0.0189656777" ixy="0.0087442604" ixz="0.0154882253" iyy="0.021260554" iyz="-0.0050592943" izz="0.0216050853"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint4" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0.0825 0 0"/>
+    <parent link="left_link3"/>
+    <child link="left_link4"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-3.0421" upper="-0.1518" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0421" soft_upper_limit="-0.1518"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0016039605 0.0292536262 -0.0972965990"/>
+      <mass value="2.3271207594"/>
+      <inertia ixx="0.0274316356" ixy="-0.0054626383" ixz="-0.0045776221" iyy="0.0250087792" iyz="0.0072115131" izz="0.0024232492"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint5" type="revolute">
+    <origin rpy="-1.570796326794897 0 0" xyz="-0.0825 0.384 0"/>
+    <parent link="left_link4"/>
+    <child link="left_link5"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="-2.8065" upper="2.8065" velocity="5.26"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8065" soft_upper_limit="2.8065"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link6">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0597131221 -0.0410294666 -0.0101692726"/>
+      <mass value="1.8170376524"/>
+      <inertia ixx="0.000724256" ixy="0.0021884556" ixz="0.0004615138" iyy="0.0072530249" iyz="-0.0006002451" izz="0.0065288729"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint6" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0 0 0"/>
+    <parent link="left_link5"/>
+    <child link="left_link6"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="0.5445" upper="4.5169" velocity="4.18"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="0.5445" soft_upper_limit="4.5169"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link7">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0045225817 0.0086261921 -0.0161633251"/>
+      <mass value="0.6271432862"/>                                                                                                                  
+      <inertia ixx="4.039e-07" ixy="1.875e-07" ixz="-1.593e-07" iyy="2.351e-07" iyz="-2.084e-07" izz="2.838e-07"/>
+    </inertial>
+  </link>
+
+  <joint name="left_joint7" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0.088 0 0"/>
+    <parent link="left_link6"/>
+    <child link="left_link7"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="-3.0159" upper="3.0159" velocity="5.26"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0159" soft_upper_limit="3.0159"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="left_link8"/>
+  
+  <joint name="left_joint8" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.107"/>
+    <parent link="left_link7"/>
+    <child link="left_link8"/>
+  </joint>
+</robot>
+)RAW_URDF";
+
+const std::string RIGHT_ROBOT_URDF = R"RAW_URDF(
+<?xml version="1.0" ?>
+<!-- =================================================================================== -->
+<!-- |    This document is adapted for the right_robot instance (Dynamics Only)        | -->
+<!-- =================================================================================== -->
+<robot name="right_fp3">
+  <link name="right_base"/>
+  
+  <joint name="right_base_joint" type="fixed">
+    <parent link="right_base"/>
+    <child link="right_link0"/>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+  </joint>
+
+  <link name="right_link0"/>
+
+  <link name="right_link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0000004128 -0.0181251324 -0.0386035970"/>
+      <mass value="2.9274653454"/>
+      <inertia ixx="0.0186029651" ixy="1.3296e-05" ixz="-0.0001140944" iyy="0.0181195421" iyz="5.33017e-05" izz="0.0053883661"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.333"/>
+    <parent link="right_link0"/>
+    <child link="right_link1"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-2.7437" upper="2.7437" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.7437" soft_upper_limit="2.7437"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0031828864 -0.0743221644 0.0088146084"/>
+      <mass value="2.9355370338"/>
+      <inertia ixx="0.0248426123" ixy="0.0012852153" ixz="0.0047668011" iyy="0.0200510561" iyz="-0.0077993576" izz="0.0448935091"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint2" type="revolute">
+    <origin rpy="-1.570796326794897 0 0" xyz="0 0 0"/>
+    <parent link="right_link1"/>
+    <child link="right_link2"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-1.7837" upper="1.7837" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-1.7837" soft_upper_limit="1.7837"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0407015686 -0.0048200565 -0.0289730823"/>
+      <mass value="2.2449013699"/>
+      <inertia ixx="0.0206960046" ixy="0.0006503378" ixz="-0.0086867454" iyy="0.0129617222" iyz="-0.0046382675" izz="0.0083748603"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint3" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0 -0.316 0"/>
+    <parent link="right_link2"/>
+    <child link="right_link3"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-2.9007" upper="2.9007" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.9007" soft_upper_limit="2.9007"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0459100965 0.0630492960 -0.0085187868"/>
+      <mass value="2.6155955791"/>
+      <inertia ixx="0.0189656777" ixy="0.0087442604" ixz="0.0154882253" iyy="0.021260554" iyz="-0.0050592943" izz="0.0216050853"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint4" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0.0825 0 0"/>
+    <parent link="right_link3"/>
+    <child link="right_link4"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87.0" lower="-3.0421" upper="-0.1518" velocity="2.62"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0421" soft_upper_limit="-0.1518"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0016039605 0.0292536262 -0.0972965990"/>
+      <mass value="2.3271207594"/>
+      <inertia ixx="0.0274316356" ixy="-0.0054626383" ixz="-0.0045776221" iyy="0.0250087792" iyz="0.0072115131" izz="0.0024232492"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint5" type="revolute">
+    <origin rpy="-1.570796326794897 0 0" xyz="-0.0825 0.384 0"/>
+    <parent link="right_link4"/>
+    <child link="right_link5"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="-2.8065" upper="2.8065" velocity="5.26"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-2.8065" soft_upper_limit="2.8065"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link6">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0597131221 -0.0410294666 -0.0101692726"/>
+      <mass value="1.8170376524"/>
+      <inertia ixx="0.000724256" ixy="0.0021884556" ixz="0.0004615138" iyy="0.0072530249" iyz="-0.0006002451" izz="0.0065288729"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint6" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0 0 0"/>
+    <parent link="right_link5"/>
+    <child link="right_link6"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="0.5445" upper="4.5169" velocity="4.18"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="0.5445" soft_upper_limit="4.5169"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link7">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0045225817 0.0086261921 -0.0161633251"/>
+      <mass value="0.6271432862"/>                                                                                                                  
+      <inertia ixx="4.039e-07" ixy="1.875e-07" ixz="-1.593e-07" iyy="2.351e-07" iyz="-2.084e-07" izz="2.838e-07"/>
+    </inertial>
+  </link>
+
+  <joint name="right_joint7" type="revolute">
+    <origin rpy="1.570796326794897 0 0" xyz="0.088 0 0"/>
+    <parent link="right_link6"/>
+    <child link="right_link7"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12.0" lower="-3.0159" upper="3.0159" velocity="5.26"/>
+    <safety_controller k_position="100.0" k_velocity="40.0" soft_lower_limit="-3.0159" soft_upper_limit="3.0159"/>
+    <dynamics D="1" K="7000" damping="0.003" friction="0.0" mu_coulomb="0" mu_viscous="16"/>
+  </joint>
+
+  <link name="right_link8"/>
+  
+  <joint name="right_joint8" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.107"/>
+    <parent link="right_link7"/>
+    <child link="right_link8"/>
+  </joint>
+</robot>
+)RAW_URDF";
+}
+// --- HACK END ---
+
 namespace franka_hardware {
 
 Robot::Robot(std::unique_ptr<franka::Robot> robot, std::unique_ptr<Model> model)
@@ -40,8 +349,22 @@ Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) : logger
         "installation_linux.html#setting-up-the-real-time-kernel");
   }
   robot_ = std::make_unique<franka::Robot>(robot_ip, rt_config);
-  model_ = std::make_unique<franka::Model>(robot_->loadModel());
-  franka_hardware_model_ = std::make_unique<Model>(model_.get());
+  // --- HACK ---
+  // depending on IP address, load hardcoded robot urdf
+  std::unique_ptr<franka::Model> franka_model_ptr;
+  
+  if (robot_ip == "192.168.0.1") {
+    franka_model_ptr = std::make_unique<franka::Model>(robot_->loadModel(LEFT_ROBOT_URDF));
+  } 
+  else if (robot_ip == "192.168.0.3") {
+    franka_model_ptr = std::make_unique<franka::Model>(robot_->loadModel(RIGHT_ROBOT_URDF));
+  } 
+  else {
+    // if no IP, fall back to previous functionality
+    franka_model_ptr = std::make_unique<franka::Model>(robot_->loadModel());
+  }
+  franka_hardware_model_ = std::make_unique<Model>(franka_model_ptr.release());
+  // --- HACK END ---
 
 }
 
