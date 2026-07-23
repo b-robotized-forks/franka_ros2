@@ -344,6 +344,8 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     RCLCPP_WARN(getLogger(), "Write skipped during mode switch: %s", e.what());
     return hardware_interface::return_type::OK;
   }
+
+  return hardware_interface::return_type::OK;
 }
 
 CallbackReturn FrankaHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
