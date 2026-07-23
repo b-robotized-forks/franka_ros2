@@ -89,7 +89,7 @@ class Robot {
   /// Stops the continuous communication read with the connected robot
   virtual void stopRobot();
 
-
+  void setControllerIsSwitching(bool switching) { controller_switch_pending_.store(switching); }
   void pauseBlockingRead();
   void resumeBlockingRead();
 
@@ -257,9 +257,6 @@ class Robot {
     return current_state_;
   }
 
- protected:
-  Robot() = default;
-
  private:
   /**
    * Get the current robot state, when the controller is active
@@ -329,9 +326,10 @@ class Robot {
   std::mutex read_sync_mutex_;
   std::condition_variable read_sync_cv_;
   std::atomic<bool> pause_read_requested_{false};
+  std::atomic<bool> controller_switch_pending_{false};
   bool read_is_paused_{false};
 
-  std::unique_ptr<franka::Robot> robot_;
+  std::shared_ptr<franka::Robot> robot_;
   std::unique_ptr<franka::ActiveControlBase> active_control_ = nullptr;
   std::unique_ptr<franka::Model> model_;
   std::unique_ptr<Model> franka_hardware_model_;
