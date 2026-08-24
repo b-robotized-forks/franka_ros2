@@ -73,6 +73,7 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
       const std::vector<std::string>& stop_interfaces) override;
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
+  CallbackReturn on_configure(const rclcpp_lifecycle::State& previous_state) override;
   CallbackReturn on_activate(const rclcpp_lifecycle::State& previous_state) override;
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State& previous_state) override;
@@ -181,7 +182,7 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   bool velocity_cartesian_interface_claimed_ = false;
   bool pose_cartesian_interface_claimed_ = false;
   bool elbow_command_interface_claimed_ = false;
- 
+
   size_t consecutive_skips_ = 0;
   static rclcpp::Logger getLogger();
 

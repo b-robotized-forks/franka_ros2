@@ -165,6 +165,18 @@ std::vector<CommandInterface> FrankaHardwareInterface::export_command_interfaces
   return command_interfaces;
 }
 
+CallbackReturn FrankaHardwareInterface::on_configure(
+    const rclcpp_lifecycle::State& /*previous_state*/) {
+        try {
+          robot_->automaticErrorRecovery();
+          RCLCPP_INFO(this->get_logger(), "Automatic recovery succeeded");
+        } catch (const franka::Exception& e) {
+          RCLCPP_ERROR(this->get_logger(), "Exception during automatic error recovery: %s", e.what());
+          return CallbackReturn::ERROR;
+        }
+        return CallbackReturn::SUCCESS;
+    }
+
 CallbackReturn FrankaHardwareInterface::on_activate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   active_mode_ = ControlInterface::None;
