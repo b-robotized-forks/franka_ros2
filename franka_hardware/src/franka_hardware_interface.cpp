@@ -175,6 +175,58 @@ CallbackReturn FrankaHardwareInterface::on_activate(
   return CallbackReturn::SUCCESS;
 }
 
+CallbackReturn FrankaHardwareInterface::on_configure(
+    const rclcpp_lifecycle::State & previous_state) {
+   if (!robot_) {
+    try {
+      RCLCPP_INFO(getLogger(), "Connecting to robot at \"%s\" ...", robot_ip_.c_str());
+      robot_ = std::make_shared<Robot>(robot_ip_, getLogger());
+    } catch (const franka::Exception& e) {
+      RCLCPP_FATAL(getLogger(), "Could not connect to robot");
+      RCLCPP_FATAL(getLogger(), "%s", fmt::format("{}", e.what()).c_str());
+      return CallbackReturn::ERROR;
+    }
+    RCLCPP_INFO(getLogger(), "Successfully connected to robot");
+  }
+
+  if (!executor_) {
+    service_node_ = std::make_shared<FrankaParamServiceServer>(rclcpp::NodeOptions(), robot_, prefix_);
+    action_node_ = std::make_shared<ActionServer>(rclcpp::NodeOptions(), robot_, prefix_);
+
+    executor_ = std::make_shared<FrankaExecutor>();
+    executor_->add_node(service_node_);
+    executor_->add_node(action_node_);
+    
+    RCLCPP_INFO(getLogger(), "Successfully initialized service and action nodes");
+  }
+
+  try {
+    robot_->automaticErrorRecovery();
+    RCLCPP_INFO(this->get_logger(), "Automatic recovery succeeded");
+  } catch (const franka::Exception& e) {
+    RCLCPP_ERROR(this->get_logger(), "Exception during automatic error recovery: %s", e.what());
+    return CallbackReturn::ERROR;
+  }
+
+  return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn FrankaHardwareInterface::on_cleanup(
+    const rclcpp_lifecycle::State& /*previous_state*/) {
+  if (executor_) {
+    if (action_node_) {
+      executor_->remove_node(action_node_);
+    }
+    if (service_node_) {
+      executor_->remove_node(service_node_);
+    }
+    executor_.reset();
+  }
+  action_node_.reset();
+  service_node_.reset();
+  return CallbackReturn::SUCCESS;
+}
+
 FrankaHardwareInterface::~FrankaHardwareInterface() {
   // Ensure executor is fully stopped and nodes are removed before members are destroyed.
   // This prevents races where executor worker threads are still running callbacks
@@ -413,26 +465,6 @@ CallbackReturn FrankaHardwareInterface::on_init(const hardware_interface::Hardwa
     RCLCPP_INFO(getLogger(), "Parameter 'prefix' is not set. Using empty prefix.");
     prefix_ = "";
   }
-
-  if (!robot_) {
-    try {
-      RCLCPP_INFO(getLogger(), "Connecting to robot at \"%s\" ...", robot_ip_.c_str());
-      robot_ = std::make_shared<Robot>(robot_ip_, getLogger());
-    } catch (const franka::Exception& e) {
-      RCLCPP_FATAL(getLogger(), "Could not connect to robot");
-      RCLCPP_FATAL(getLogger(), "%s", fmt::format("{}", e.what()).c_str());
-      return CallbackReturn::ERROR;
-    }
-    RCLCPP_INFO(getLogger(), "Successfully connected to robot");
-  }
-
-  service_node_ =
-      std::make_shared<FrankaParamServiceServer>(rclcpp::NodeOptions(), robot_, prefix_);
-  executor_ = std::make_shared<FrankaExecutor>();
-  executor_->add_node(service_node_);
-
-  action_node_ = std::make_shared<ActionServer>(rclcpp::NodeOptions(), robot_, prefix_);
-  executor_->add_node(action_node_);
 
   return CallbackReturn::SUCCESS;
 }
