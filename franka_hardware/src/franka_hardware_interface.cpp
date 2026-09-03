@@ -385,13 +385,17 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     // Thrown if mutex is contended during write setup.
     return hardware_interface::return_type::OK;
   } catch (const std::runtime_error& e) {
-    // Transient race during mode switch — the RT write() can overlap with
-    // perform_command_mode_switch on the non-RT thread.  Warn instead of
-    // returning ERROR so the controller_manager does not cascade-deactivate
-    // all hardware and controllers.
-    consecutive_skips_++;
-    if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
-        RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to active_control_=null!", consecutive_skips_);
+    if (active_mode_ == ControlInterface::None) {
+        // Transient race during mode switch — the RT write() can overlap with
+        // perform_command_mode_switch on the non-RT thread.  Warn instead of
+        // returning ERROR so the controller_manager does not cascade-deactivate
+        // all hardware and controllers.
+        consecutive_skips_++;
+        if (consecutive_skips_ == 1 || consecutive_skips_ % 5 == 0) {
+            RCLCPP_ERROR(getLogger(), "SKIPPING WRITE CYCLE %zu due to active_control_=null!", consecutive_skips_);
+        }
+        RCLCPP_WARN(getLogger(), "Write skipped during mode switch: %s", e.what());
+      return hardware_interface::return_type::OK;
     }
     RCLCPP_WARN(getLogger(), "Write skipped during mode switch: %s", e.what());
     return hardware_interface::return_type::OK;
