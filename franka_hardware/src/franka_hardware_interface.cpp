@@ -238,8 +238,7 @@ CallbackReturn FrankaHardwareInterface::on_configure(
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn FrankaHardwareInterface::on_cleanup(
-    const rclcpp_lifecycle::State& /*previous_state*/) {
+void FrankaHardwareInterface::disconnect_ros_nodes(){
   if (executor_) {
     if (action_node_) {
       executor_->remove_node(action_node_);
@@ -250,25 +249,44 @@ CallbackReturn FrankaHardwareInterface::on_cleanup(
     executor_.reset();
   }
   action_node_.reset();
-  service_node_.reset();
-  return CallbackReturn::SUCCESS;
+  service_node_.reset(); 
+}
+
+void FrankaHardwareInterface::disconnect_franka(){
+  if (robot_) {
+    std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+    robot_->stopRobot();
+  }
+  active_mode_ = ControlInterface::None;
+  needs_initial_command_ = true;
+  hw_franka_model_ptr_ = nullptr;
+
+  disconnect_ros_nodes();
+
+  robot_.reset();
 }
 
 FrankaHardwareInterface::~FrankaHardwareInterface() {
   // Ensure executor is fully stopped and nodes are removed before members are destroyed.
   // This prevents races where executor worker threads are still running callbacks
   // that reference nodes or robot_ during destruction.
-  if (executor_) {
-    if (action_node_) {
-      executor_->remove_node(action_node_);
-    }
-    if (service_node_) {
-      executor_->remove_node(service_node_);
-    }
-    executor_.reset();
-  }
-  action_node_.reset();
-  service_node_.reset();
+  disconnect_ros_nodes();
+}
+
+CallbackReturn FrankaHardwareInterface::on_error(
+  const rclcpp_lifecycle::State& /*previous_state*/) {
+
+  disconnect_franka();
+
+  return CallbackReturn::SUCCESS;
+}
+
+CallbackReturn FrankaHardwareInterface::on_cleanup(
+  const rclcpp_lifecycle::State& /*previous_state*/) {
+
+  disconnect_franka();
+
+  return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn FrankaHardwareInterface::on_deactivate(
