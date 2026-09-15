@@ -55,8 +55,12 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   hardware_interface::return_type perform_command_mode_switch(
       const std::vector<std::string>& start_interfaces,
       const std::vector<std::string>& stop_interfaces) override;
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
+  // Joint state/command and gpio command interfaces are declared in the URDF and already picked
+  // up by the default on_export_state_interfaces()/on_export_command_interfaces(); only the
+  // robot_state/robot_model/robot_time, cartesian_pose_state and elbow_state interfaces aren't
+  // tied to a joint or gpio and need explicit declaration here.
+  std::vector<hardware_interface::InterfaceDescription> export_unlisted_state_interface_descriptions()
+      override;
   CallbackReturn on_activate(const rclcpp_lifecycle::State& previous_state) override;
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
   hardware_interface::return_type read(const rclcpp::Time& time,
@@ -182,5 +186,29 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   const size_t max_number_start_interfaces = 45;
 
   std::unordered_set<std::string> exported_command_interfaces_;
+
+  // Interface names, built once in on_init() (matching kassow_kord_hardware_interface's
+  // convention) instead of concatenating "<prefix>/<interface>" fresh on every read()/write()
+  // cycle. set_state()/get_command() still do a name lookup per call - only the string-building
+  // is cached, not the resolved handle.
+  std::array<std::string, kNumberOfJoints> joint_position_state_names_;
+  std::array<std::string, kNumberOfJoints> joint_velocity_state_names_;
+  std::array<std::string, kNumberOfJoints> joint_effort_state_names_;
+
+  // A command interface declared for a joint or gpio, together with the shared command vector
+  // slot (from command_interface_map_) its pulled value gets written into - replaces the raw
+  // pointer that used to alias that same slot directly.
+  struct CommandPull {
+    std::string name;
+    std::vector<double>* target;
+    size_t index;
+  };
+  std::vector<CommandPull> command_pulls_;
+
+  std::string robot_state_interface_full_name_;
+  std::string robot_model_interface_full_name_;
+  std::string robot_time_interface_full_name_;
+  std::array<std::string, 16> cartesian_pose_state_names_;
+  std::array<std::string, 2> elbow_state_full_names_;
 };
 }  // namespace franka_hardware
