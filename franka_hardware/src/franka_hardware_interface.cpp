@@ -353,11 +353,6 @@ void FrankaHardwareInterface::updateStateInterfaces(const franka::RobotState& ro
 
 hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time& /*time*/,
                                                               const rclcpp::Duration& /*period*/) {
-  if (control_fault_latched_.load()) {
-    // Preserve the last captured state while the control fault remains latched.
-    return hardware_interface::return_type::OK;
-  }
-
   if (hw_franka_model_ptr_ == nullptr) {
     hw_franka_model_ptr_ = robot_->getModel();
   }
@@ -376,6 +371,9 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
     return hardware_interface::return_type::OK;
   } catch (const franka::ControlException& e) {
     if (!control_fault_latched_.exchange(true)) {
+    // This will be caught in the next write(), and the resulting on_deactivate() will call stopRobot().
+    // Then, on following read() calls in INACTIVE, write() is skipped, so no further ControlExceptions will be thrown
+    // We will deactivate the hardware and just monitor states.
       RCLCPP_ERROR(getLogger(), "%s Clear the robot error before activating the hardware.",
                    e.what());
     }
