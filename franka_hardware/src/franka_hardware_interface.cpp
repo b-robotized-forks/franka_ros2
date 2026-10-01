@@ -291,13 +291,6 @@ CallbackReturn FrankaHardwareInterface::on_cleanup(
 
 CallbackReturn FrankaHardwareInterface::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
-  std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
-
-  robot_->stopRobot();
-
-  active_mode_ = ControlInterface::None;
-  needs_initial_command_ = true;
-  control_fault_latched_.store(false);
   return CallbackReturn::SUCCESS;
 }
 
@@ -371,11 +364,15 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
     return hardware_interface::return_type::OK;
   } catch (const franka::ControlException& e) {
     if (!control_fault_latched_.exchange(true)) {
-    // This will be caught in the next write(), and the resulting on_deactivate() will call stopRobot().
-    // Then, on following read() calls in INACTIVE, write() is skipped, so no further ControlExceptions will be thrown
-    // We will deactivate the hardware and just monitor states.
       RCLCPP_ERROR(getLogger(), "%s Clear the robot error before activating the hardware.",
                    e.what());
+    }
+    // stop the robot immediatelly. Otherwise, on_deactivate() in the main thread cannot take control_mutex_.
+    {
+      std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+      robot_->stopRobot();
+      active_mode_ = ControlInterface::None;
+      needs_initial_command_ = true;
     }
     return hardware_interface::return_type::OK;
   } catch (const franka::NetworkException& e) {
@@ -442,6 +439,13 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     if (!control_fault_latched_.exchange(true)) {
       RCLCPP_ERROR(getLogger(), "%s Clear the robot error before activating the hardware.",
                    e.what());
+    }
+    // stop the robot immediatelly. Otherwise, on_deactivate() in the main thread cannot take control_mutex_.
+    {
+      std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+      robot_->stopRobot();
+      active_mode_ = ControlInterface::None;
+      needs_initial_command_ = true;
     }
     return hardware_interface::return_type::DEACTIVATE;
   } catch (const franka::NetworkException& e) {
