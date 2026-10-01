@@ -291,13 +291,6 @@ CallbackReturn FrankaHardwareInterface::on_cleanup(
 
 CallbackReturn FrankaHardwareInterface::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
-  std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
-
-  robot_->stopRobot();
-
-  active_mode_ = ControlInterface::None;
-  needs_initial_command_ = true;
-  control_fault_latched_.store(false);
   return CallbackReturn::SUCCESS;
 }
 
@@ -353,11 +346,6 @@ void FrankaHardwareInterface::updateStateInterfaces(const franka::RobotState& ro
 
 hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time& /*time*/,
                                                               const rclcpp::Duration& /*period*/) {
-  if (control_fault_latched_.load()) {
-    // Preserve the last captured state while the control fault remains latched.
-    return hardware_interface::return_type::OK;
-  }
-
   if (hw_franka_model_ptr_ == nullptr) {
     hw_franka_model_ptr_ = robot_->getModel();
   }
@@ -378,6 +366,13 @@ hardware_interface::return_type FrankaHardwareInterface::read(const rclcpp::Time
     if (!control_fault_latched_.exchange(true)) {
       RCLCPP_ERROR(getLogger(), "%s Clear the robot error before activating the hardware.",
                    e.what());
+    }
+    // stop the robot immediatelly. Otherwise, on_deactivate() in the main thread cannot take control_mutex_.
+    {
+      std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+      robot_->stopRobot();
+      active_mode_ = ControlInterface::None;
+      needs_initial_command_ = true;
     }
     return hardware_interface::return_type::OK;
   } catch (const franka::NetworkException& e) {
@@ -444,6 +439,13 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
     if (!control_fault_latched_.exchange(true)) {
       RCLCPP_ERROR(getLogger(), "%s Clear the robot error before activating the hardware.",
                    e.what());
+    }
+    // stop the robot immediatelly. Otherwise, on_deactivate() in the main thread cannot take control_mutex_.
+    {
+      std::lock_guard<realtime_tools::prio_inherit_mutex> lock(control_mutex_);
+      robot_->stopRobot();
+      active_mode_ = ControlInterface::None;
+      needs_initial_command_ = true;
     }
     return hardware_interface::return_type::DEACTIVATE;
   } catch (const franka::NetworkException& e) {
