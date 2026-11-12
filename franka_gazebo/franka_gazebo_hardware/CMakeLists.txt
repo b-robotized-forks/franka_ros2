@@ -40,15 +40,15 @@ target_include_directories(franka_gz_hardware_plugins
         ${EIGEN3_INCLUDE_DIRS}
 )
 
-ament_target_dependencies(franka_gz_hardware_plugins
-        ament_index_cpp
-        Franka
-        franka_hardware
-        hardware_interface
-        pluginlib
-        rclcpp
-        rclcpp_lifecycle
-        realtime_tools
+target_link_libraries(franka_gz_hardware_plugins
+  ${ament_index_cpp_TARGETS}
+  Franka::Franka
+  ${franka_hardware_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_lifecycle_TARGETS}
+  ${realtime_tools_TARGETS}
 )
 
 # gz_ros2_control provides the GazeboSimSystemInterface base class as headers

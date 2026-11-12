@@ -48,8 +48,19 @@ target_include_directories(
 
 target_link_libraries(franka_semantic_components Franka::Franka Eigen3::Eigen)
 
-ament_target_dependencies(franka_semantic_components Franka sensor_msgs
-                          geometry_msgs ${THIS_PACKAGE_INCLUDE_DEPENDS})
+target_link_libraries(franka_semantic_components
+  ${sensor_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+)
+foreach(dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
+  if(${dependency}_TARGETS)
+    target_link_libraries(franka_semantic_components ${${dependency}_TARGETS})
+  else()
+    # The franka packages export no CMake targets
+    target_include_directories(franka_semantic_components PUBLIC ${${dependency}_INCLUDE_DIRS})
+    target_link_libraries(franka_semantic_components ${${dependency}_LIBRARIES})
+  endif()
+endforeach()
 
 install(TARGETS franka_semantic_components DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
@@ -93,13 +104,13 @@ if(BUILD_TESTING)
   target_link_libraries(test_franka_robot_state
     franka_semantic_components
   )
-  ament_target_dependencies(test_franka_robot_state
-    controller_interface
-    hardware_interface
-    franka_msgs
-    sensor_msgs
-    geometry_msgs
-    Franka
+  target_link_libraries(test_franka_robot_state
+    ${controller_interface_TARGETS}
+    ${hardware_interface_TARGETS}
+    ${franka_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    Franka::Franka
   )
   ament_add_gmock(test_franka_robot_model test/franka_robot_model_test.cpp)
   target_include_directories(test_franka_robot_model PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -107,13 +118,13 @@ if(BUILD_TESTING)
   target_link_libraries(test_franka_robot_model
     franka_semantic_components
   )
-  ament_target_dependencies(test_franka_robot_model
-    controller_interface
-    hardware_interface
-    franka_msgs
-    sensor_msgs
-    geometry_msgs
-    Franka
+  target_link_libraries(test_franka_robot_model
+    ${controller_interface_TARGETS}
+    ${hardware_interface_TARGETS}
+    ${franka_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    Franka::Franka
   )
 
   ament_add_gmock(
@@ -126,11 +137,10 @@ if(BUILD_TESTING)
     franka_semantic_components
   )
 
-  ament_target_dependencies(
-    franka_semantic_component_interface_test
-    hardware_interface
-    sensor_msgs
-    geometry_msgs
+  target_link_libraries(franka_semantic_component_interface_test
+    ${hardware_interface_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
   )
 
   ament_add_gmock(
@@ -144,10 +154,7 @@ if(BUILD_TESTING)
     franka_semantic_components
   )
 
-  ament_target_dependencies(
-    franka_cartesian_velocity_interface_test
-    hardware_interface
-  )
+  target_link_libraries(franka_cartesian_velocity_interface_test ${hardware_interface_TARGETS})
 
   ament_add_gmock(
     franka_cartesian_pose_interface_test
@@ -160,11 +167,10 @@ if(BUILD_TESTING)
     franka_semantic_components
   )
 
-  ament_target_dependencies(
-    franka_cartesian_pose_interface_test
-    hardware_interface
-    sensor_msgs
-    geometry_msgs
+  target_link_libraries(franka_cartesian_pose_interface_test
+    ${hardware_interface_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
   )
 
   install(FILES test/robot_description_test.txt

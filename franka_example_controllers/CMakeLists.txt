@@ -60,20 +60,19 @@ target_include_directories( ${PROJECT_NAME}
 )
 
 
-ament_target_dependencies(
-        ${PROJECT_NAME}
-        controller_interface
-        franka_msgs
-        franka_semantic_components
-        hardware_interface
-        moveit_core
-        moveit_msgs
-        pinocchio
-        pluginlib
-        rclcpp
-        rclcpp_lifecycle
-        realtime_tools
-        std_srvs
+target_link_libraries(${PROJECT_NAME}
+  ${controller_interface_TARGETS}
+  ${franka_msgs_TARGETS}
+  ${franka_semantic_components_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${moveit_core_TARGETS}
+  ${moveit_msgs_TARGETS}
+  ${pinocchio_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_lifecycle_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${std_srvs_TARGETS}
 )
 
 pluginlib_export_plugin_description_file(
@@ -98,10 +97,11 @@ add_executable(ptp_motion_example_node
 
 target_include_directories(ptp_motion_example_node PRIVATE include ${EIGEN3_INCLUDE_DIRS})
 
-ament_target_dependencies(ptp_motion_example_node
-    rclcpp
-    rclcpp_action
-    franka_msgs)
+target_link_libraries(ptp_motion_example_node
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${franka_msgs_TARGETS}
+)
 
 install(TARGETS ptp_motion_example_node
     RUNTIME DESTINATION lib/${PROJECT_NAME})
@@ -129,26 +129,26 @@ if(BUILD_TESTING)
     ament_add_gmock(${PROJECT_NAME}_gravity_test test/test_gravity_compensation_example.cpp)
     target_include_directories(${PROJECT_NAME}_gravity_test PRIVATE include)
     target_link_libraries(${PROJECT_NAME}_gravity_test ${PROJECT_NAME})
-    ament_target_dependencies(${PROJECT_NAME}_gravity_test
-        controller_manager
-        ros2_control_test_assets
+    target_link_libraries(${PROJECT_NAME}_gravity_test
+      ${controller_manager_TARGETS}
+      ${ros2_control_test_assets_TARGETS}
     )
 
     ament_add_gmock(${PROJECT_NAME}_move_to_start_test test/test_move_to_start_example_controller.cpp)
     target_include_directories(${PROJECT_NAME}_move_to_start_test PRIVATE include)
     target_link_libraries(${PROJECT_NAME}_move_to_start_test ${PROJECT_NAME})
-    ament_target_dependencies(${PROJECT_NAME}_move_to_start_test
-        controller_manager
-        ros2_control_test_assets
+    target_link_libraries(${PROJECT_NAME}_move_to_start_test
+      ${controller_manager_TARGETS}
+      ${ros2_control_test_assets_TARGETS}
     )
 
     ament_add_gmock(${PROJECT_NAME}_load_all_test
         test/test_load_all_example_controllers.cpp)
     target_include_directories(${PROJECT_NAME}_load_all_test PRIVATE include)
     target_link_libraries(${PROJECT_NAME}_load_all_test ${PROJECT_NAME})
-    ament_target_dependencies(${PROJECT_NAME}_load_all_test
-        controller_manager
-        ros2_control_test_assets
+    target_link_libraries(${PROJECT_NAME}_load_all_test
+      ${controller_manager_TARGETS}
+      ${ros2_control_test_assets_TARGETS}
     )
 
     if(CHECK_TIDY)

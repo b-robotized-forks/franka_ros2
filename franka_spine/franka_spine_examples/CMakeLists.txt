@@ -19,7 +19,11 @@ find_package(franka_spine_msgs REQUIRED)
 
 add_executable(spine_client_example_cpp src/spine_client_example.cpp)
 target_include_directories(spine_client_example_cpp PRIVATE include)
-ament_target_dependencies(spine_client_example_cpp rclcpp rclcpp_action franka_spine_msgs)
+target_link_libraries(spine_client_example_cpp
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${franka_spine_msgs_TARGETS}
+)
 
 install(TARGETS spine_client_example_cpp
     RUNTIME DESTINATION lib/${PROJECT_NAME}

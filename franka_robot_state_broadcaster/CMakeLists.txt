@@ -49,8 +49,15 @@ generate_parameter_library(franka_robot_state_broadcaster_parameters src/franka_
 
 target_link_libraries(franka_robot_state_broadcaster
                       PUBLIC franka_robot_state_broadcaster_parameters)
-ament_target_dependencies(franka_robot_state_broadcaster PUBLIC
-                          ${THIS_PACKAGE_INCLUDE_DEPENDS})
+foreach(dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
+  if(${dependency}_TARGETS)
+    target_link_libraries(franka_robot_state_broadcaster PUBLIC ${${dependency}_TARGETS})
+  else()
+    # The franka packages export no CMake targets
+    target_include_directories(franka_robot_state_broadcaster PUBLIC ${${dependency}_INCLUDE_DIRS})
+    target_link_libraries(franka_robot_state_broadcaster PUBLIC ${${dependency}_LIBRARIES})
+  endif()
+endforeach()
 
 
 pluginlib_export_plugin_description_file(controller_interface franka_robot_state_broadcaster.xml)
@@ -105,7 +112,11 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/test/franka_robot_state_broadcaster_parameters.yaml)
     target_include_directories(${PROJECT_NAME}_test PRIVATE include)
     target_link_libraries(${PROJECT_NAME}_test ${PROJECT_NAME})
-    ament_target_dependencies(${PROJECT_NAME}_test controller_manager hardware_interface ros2_control_test_assets)
+    target_link_libraries(${PROJECT_NAME}_test
+      ${controller_manager_TARGETS}
+      ${hardware_interface_TARGETS}
+      ${ros2_control_test_assets_TARGETS}
+    )
 
     # DISABLED: This load controller test is failing in Jenkins due to API changes
     # ament_add_gmock(test_load_franka_robot_state_broadcaster test/test_load_franka_robot_state_broadcaster.cpp)

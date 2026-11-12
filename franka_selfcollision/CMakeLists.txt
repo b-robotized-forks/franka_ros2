@@ -47,12 +47,12 @@ target_link_libraries(self_collision_node
                     ${PROJECT_NAME}
                     pinocchio::pinocchio)
 
-ament_target_dependencies(self_collision_node
-    ament_index_cpp
-    franka_msgs
-    rclcpp
-    sensor_msgs
-    std_msgs
+target_link_libraries(self_collision_node
+  ${ament_index_cpp_TARGETS}
+  ${franka_msgs_TARGETS}
+  ${rclcpp_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
 )
 
 install(DIRECTORY include/ DESTINATION include)

@@ -51,22 +51,21 @@ target_link_libraries(${PROJECT_NAME}
  swerve_drive_controller_parameters
 )
 
-ament_target_dependencies(
-        ${PROJECT_NAME}
-        controller_interface
-        hardware_interface
-        pluginlib
-        rclcpp
-        rclcpp_lifecycle
-        tf2_msgs
-        nav_msgs
-        geometry_msgs
-        diff_drive_controller
-        generate_parameter_library
-        franka_semantic_components
-        realtime_tools
-        kdl_parser
-        urdf
+target_link_libraries(${PROJECT_NAME}
+  ${controller_interface_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_lifecycle_TARGETS}
+  ${tf2_msgs_TARGETS}
+  ${nav_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${diff_drive_controller_TARGETS}
+  ${generate_parameter_library_TARGETS}
+  ${franka_semantic_components_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${kdl_parser_TARGETS}
+  ${urdf_TARGETS}
 )
 
 ament_python_install_package(${PROJECT_NAME})
@@ -105,7 +104,7 @@ if(BUILD_TESTING)
     ament_add_gtest(${test_name} ${source_file})
     target_include_directories(${test_name} PRIVATE include)
     target_link_libraries(${test_name} ${PROJECT_NAME})
-    ament_target_dependencies(${test_name} rclcpp)
+    target_link_libraries(${test_name} ${rclcpp_TARGETS})
   endfunction()
 
   add_franka_mobile_test(test_odometry test/test_odometry.cpp)

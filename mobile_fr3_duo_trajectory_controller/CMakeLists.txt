@@ -49,17 +49,15 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
                       ${PROJECT_NAME}_parameters)
 
 
-ament_target_dependencies(
-        ${PROJECT_NAME}
-        PUBLIC
-        rclcpp
-        rclcpp_action
-        rclcpp_lifecycle
-        realtime_tools
-        control_msgs
-        controller_interface
-        trajectory_msgs
-        franka_semantic_components
+target_link_libraries(${PROJECT_NAME} PUBLIC
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${rclcpp_lifecycle_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${control_msgs_TARGETS}
+  ${controller_interface_TARGETS}
+  ${trajectory_msgs_TARGETS}
+  ${franka_semantic_components_TARGETS}
 )
 
 pluginlib_export_plugin_description_file(controller_interface ${PROJECT_NAME}.xml)

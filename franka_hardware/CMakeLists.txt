@@ -41,15 +41,14 @@ target_include_directories(
 
 target_compile_definitions(franka_hardware PRIVATE NON_POLLING)
 
-ament_target_dependencies(
-        franka_hardware
-        hardware_interface
-        Franka
-        pluginlib
-        rclcpp
-        rclcpp_action
-        franka_msgs
-        realtime_tools
+target_link_libraries(franka_hardware
+  ${hardware_interface_TARGETS}
+  Franka::Franka
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${franka_msgs_TARGETS}
+  ${realtime_tools_TARGETS}
 )
 
 pluginlib_export_plugin_description_file(hardware_interface franka_hardware.xml)

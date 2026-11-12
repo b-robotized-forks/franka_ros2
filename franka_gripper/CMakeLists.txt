@@ -32,15 +32,16 @@ target_include_directories(gripper_server PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
-ament_target_dependencies(gripper_server
-        franka_msgs
-        rclcpp
-        rclcpp_action
-        rclcpp_components
-        Franka
-        sensor_msgs
-        std_srvs
-        control_msgs)
+target_link_libraries(gripper_server
+  ${franka_msgs_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${rclcpp_components_TARGETS}
+  Franka::Franka
+  ${sensor_msgs_TARGETS}
+  ${std_srvs_TARGETS}
+  ${control_msgs_TARGETS}
+)
 rclcpp_components_register_node(gripper_server PLUGIN "franka_gripper::GripperActionServer" EXECUTABLE franka_gripper_node)
 install(TARGETS
         gripper_server
