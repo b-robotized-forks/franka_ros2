@@ -495,10 +495,12 @@ hardware_interface::return_type FrankaHardwareInterface::write(const rclcpp::Tim
   return hardware_interface::return_type::OK;
 }
 
-CallbackReturn FrankaHardwareInterface::on_init(const hardware_interface::HardwareInfo& info) {
-  if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS) {
+CallbackReturn FrankaHardwareInterface::on_init(
+    const hardware_interface::HardwareComponentInterfaceParams& params) {
+  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS) {
     return CallbackReturn::ERROR;
   }
+  const auto& info = get_hardware_info();
 
   // Build set of exported command interfaces for direct lookup
   exported_command_interfaces_.clear();

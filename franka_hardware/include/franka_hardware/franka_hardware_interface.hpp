@@ -85,7 +85,7 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
                                        const rclcpp::Duration& period) override;
   hardware_interface::return_type write(const rclcpp::Time& time,
                                         const rclcpp::Duration& period) override;
-  CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+  CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams& params) override;
   CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override;
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
   CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
