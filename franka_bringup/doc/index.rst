@@ -222,7 +222,7 @@ The main config file keys are:
       - Unique prefixes used for the two arms.
     * - ``robot_ips``
       - stringified list
-      - ``"['172.16.16.11','172.16.16.12']"``
+      - ``"['172.16.16.12','172.16.16.11']"``
       - FCI IP addresses of the two robots.
     * - ``load_gripper``
       - bool

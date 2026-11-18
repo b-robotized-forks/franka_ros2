@@ -17,7 +17,7 @@
   <xacro:include filename="$(find franka_hardware)/ros2_control/tmrv0_2_hardware_plugins.xacro"/>
 
   <!-- ros2_control-specific arguments (not declared by description) -->
-  <xacro:arg name="robot_ips" default="['172.16.0.1','172.16.0.2','172.16.0.3']"/>
+  <xacro:arg name="robot_ips" default="['172.16.16.10','172.16.16.12','172.16.16.11']"/>
   <xacro:property name="robot_ips_list" value="${$(arg robot_ips)}"/>
   <xacro:arg name="use_fake_hardware" default="false"/>
   <xacro:arg name="fake_sensor_commands" default="false"/>

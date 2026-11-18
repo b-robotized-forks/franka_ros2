@@ -23,6 +23,14 @@ from typing import Any, Callable, Optional, Tuple
 from franka_spine_server.spine_api import SpineMotion, SpineStatus
 from franka_spine_server.spine_api_client import SpineApiClient
 
+# Pause before anyone retries an endpoint whose last read failed.
+DEFAULT_RETRY_DELAY = 0.5
+
+# Lower bound on how often the fault state is sampled during a move. The drive
+# stops itself on a fault; this poll only reports it, so sampling it every
+# feedback cycle would double the request rate for no benefit.
+MOTION_STATE_CHECK_PERIOD = 0.5
+
 
 def _motion_payload_label(data: Any) -> str:
     """Normalize a start_motion body to a stop-reason string."""
@@ -64,6 +72,89 @@ def _is_failed_dependency(data: Any) -> bool:
     """True if the device rejected the call with HTTP 424."""
     text = str(data)
     return '424' in text or 'Failed Dependency' in text
+
+
+@dataclass
+class _Sample:
+    """A REST read together with the monotonic time it completed."""
+
+    success: bool
+    data: Any = None
+    stamp: float = 0.0
+
+
+class _CoalescingReader:
+    """Serialize, coalesce and rate-limit reads of a single REST endpoint.
+
+    Polling the spine concurrently is what wedges the device. Every in-flight
+    request holds its own connection, so once the upstream answers slower than
+    the poll period the requests stack up until nginx returns 504 and the API
+    only recovers with a reboot. This reader makes that impossible:
+
+    * a sample younger than ``max_age`` is served from cache, capping the
+      request rate at ``1 / max_age`` no matter how many callers there are;
+    * at most one request is in flight, and callers arriving while it runs get
+      the previous sample rather than opening a second connection;
+    * after a failed read the endpoint is left alone for ``retry_delay``.
+    """
+
+    def __init__(
+        self,
+        read: Callable[[], Tuple[bool, Any]],
+        max_age: float,
+        retry_delay: float,
+        on_error: Optional[Callable[[Any], None]] = None,
+    ):
+        self._read = read
+        self._max_age = max_age
+        self._retry_delay = retry_delay
+        self._on_error = on_error
+        self._read_lock = threading.Lock()
+        self._cache_lock = threading.Lock()
+        self._sample: Optional[_Sample] = None
+        self._generation = 0
+
+    def get(self) -> _Sample:
+        """Return the current sample, reading from the device only when due."""
+        cached, generation = self._cached()
+        if cached is not None and not self._is_due(cached):
+            return cached
+
+        # Only wait for an in-flight read when there is nothing to fall back on.
+        if not self._read_lock.acquire(blocking=cached is None):
+            return cached
+        try:
+            cached, generation = self._cached()
+            if cached is not None and not self._is_due(cached):
+                return cached
+
+            success, data = self._read()
+            if not success and self._on_error:
+                self._on_error(data)
+            sample = _Sample(success=success, data=data, stamp=time.monotonic())
+            with self._cache_lock:
+                # A command invalidated the cache while this read was in
+                # flight, so the result predates it: serve it to the caller
+                # that asked for it, but do not hand it to anyone else.
+                if generation == self._generation:
+                    self._sample = sample
+            return sample
+        finally:
+            self._read_lock.release()
+
+    def invalidate(self) -> None:
+        """Drop the cache so the next ``get`` reads from the device."""
+        with self._cache_lock:
+            self._sample = None
+            self._generation += 1
+
+    def _cached(self) -> Tuple[Optional[_Sample], int]:
+        with self._cache_lock:
+            return self._sample, self._generation
+
+    def _is_due(self, sample: _Sample) -> bool:
+        hold = self._max_age if sample.success else self._retry_delay
+        return time.monotonic() - sample.stamp >= hold
 
 
 @dataclass
@@ -136,12 +227,30 @@ class SpineController:
         spine_ip: str,
         timeout: float,
         feedback_rate: float = 10.0,
+        retry_delay: float = DEFAULT_RETRY_DELAY,
         logger: Optional[logging.Logger] = None,
     ):
         self.api = SpineApiClient(spine_ip, timeout=timeout)
         self.feedback_rate = feedback_rate
         self.logger = logger or logging.getLogger(__name__)
         self._motion_lock = threading.Lock()
+
+        # Every read of position and state goes through these, so the device
+        # sees at most ``feedback_rate`` requests per second per endpoint
+        # however many clients call the services or subscribe to the topics.
+        sample_period = 1.0 / feedback_rate
+        self._position_reader = _CoalescingReader(
+            self.api.get_position,
+            sample_period,
+            retry_delay,
+            on_error=lambda data: self.logger.error(f'get_position failed: {data}'),
+        )
+        self._state_reader = _CoalescingReader(
+            self.api.get_state,
+            sample_period,
+            retry_delay,
+            on_error=lambda data: self.logger.error(f'get_state failed: {data}'),
+        )
 
     @property
     def motion_in_progress(self) -> bool:
@@ -150,11 +259,11 @@ class SpineController:
 
     def get_state(self) -> StateResult:
         """Query the current spine state."""
-        success, data = self.api.get_state()
-        if not success:
-            self.logger.error(f'get_state failed: {data}')
+        sample = self._state_reader.get()
+        if not sample.success:
             return StateResult(success=False)
 
+        data = sample.data
         result = StateResult(success=True)
         if isinstance(data, str):
             result.state = data
@@ -168,15 +277,15 @@ class SpineController:
 
     def get_position(self) -> PositionResult:
         """Query the current position in metres."""
-        success, data = self.api.get_position()
-        if not success:
-            self.logger.error(f'get_position failed: {data}')
+        sample = self._position_reader.get()
+        if not sample.success or not isinstance(sample.data, dict):
             return PositionResult(success=False)
-        return PositionResult(success=True, position=data.get('position', 0.0))
+        return PositionResult(success=True, position=sample.data.get('position', 0.0))
 
     def fault_reset(self) -> CommandResult:
         """Reset the spine from a fault state."""
         success, data = self.api.fault_reset()
+        self._state_reader.invalidate()
         if not success:
             msg = f'Fault reset failed: {data}'
             self.logger.error(msg)
@@ -187,6 +296,7 @@ class SpineController:
     def switch_on(self) -> CommandResult:
         """Switch the spine on."""
         success, data = self.api.switch_on()
+        self._state_reader.invalidate()
         if not success:
             msg = f'Switch on failed: {data}'
             self.logger.error(msg)
@@ -197,6 +307,7 @@ class SpineController:
     def switch_off(self) -> CommandResult:
         """Switch the spine off."""
         success, data = self.api.switch_off()
+        self._state_reader.invalidate()
         if not success:
             msg = f'Switch off failed: {data}'
             self.logger.error(msg)
@@ -356,6 +467,7 @@ class SpineController:
     def _quick_stop(self) -> CommandResult:
         """POST motion:quick-stop. Does not re-arm."""
         success, data = self.api.halt_motion()
+        self._state_reader.invalidate()
         if not success:
             msg = f'Halt failed: {data}'
             self.logger.error(msg)
@@ -381,9 +493,9 @@ class SpineController:
         deadline = time.monotonic() + self.api.timeout
         last_state = ''
         while time.monotonic() < deadline:
-            success, data = self.api.get_state()
-            if success:
-                last_state = _state_from_payload(data)
+            sample = self._state_reader.get()
+            if sample.success:
+                last_state = _state_from_payload(sample.data)
                 if last_state == expected:
                     return True, last_state
                 if last_state in SpineStatus.FAULT_STATES:
@@ -405,6 +517,8 @@ class SpineController:
         request; ``error`` is set when halt failed or the spine faulted.
         """
         period = 1.0 / self.feedback_rate
+        state_check_period = max(period, MOTION_STATE_CHECK_PERIOD)
+        next_state_check = 0.0
 
         while is_active():
             if is_cancelled() and not motion_done.is_set():
@@ -414,20 +528,16 @@ class SpineController:
                     return _PollOutcome(cancelled=True, error=stop.message)
                 return _PollOutcome(cancelled=True)
 
-            success, data = self.api.get_position()
-            if success:
-                current_position = data.get('position', 0.0)
-                if on_feedback:
-                    on_feedback(current_position)
-            else:
-                self.logger.warning(f'Failed to read position: {data}')
+            position = self.get_position()
+            if position.success and on_feedback:
+                on_feedback(position.position)
 
-            state_success, state_data = self.api.get_state()
-            if state_success:
-                state = _state_from_payload(state_data)
-                if state in SpineStatus.FAULT_STATES:
-                    self.logger.error(f'Spine entered fault state: {state}')
-                    return _PollOutcome(error=f'Spine entered fault state: {state}')
+            if time.monotonic() >= next_state_check:
+                next_state_check = time.monotonic() + state_check_period
+                state = self.get_state()
+                if state.success and state.state in SpineStatus.FAULT_STATES:
+                    self.logger.error(f'Spine entered fault state: {state.state}')
+                    return _PollOutcome(error=f'Spine entered fault state: {state.state}')
 
             if motion_done.is_set():
                 return _PollOutcome()
