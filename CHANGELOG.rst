@@ -1,6 +1,120 @@
 Changelog for package franka_ros2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+v3.6.1 (2026-10-27)
+-------------------
+Requires libfranka >= 0.20.4 and franka_description >= 2.9.0 requires ROS 2 Jazzy
+
+* fix: ``tmrv0_2.launch.py`` read ``robot_ip`` and ``use_rviz`` only from the
+  config file. Both are now launch arguments that override the config file
+  when given.
+* fix: ``franka_mobile_sensors`` started the ``robot_state_publisher`` for the
+  sensor frames only together with RViz, so ``start_rviz:=false`` dropped the
+  lidar and camera frames from TF. With RViz off, a ``robot_state_publisher``
+  in the ``sensors`` namespace now publishes them (``publish_sensor_tf``,
+  default ``true``). Its tree starts at ``base_link``, its URDF stays off
+  ``/robot_description`` and it does not read ``/joint_states``, so with
+  ``start_rviz:=false`` it can run next to ``tmrv0_2.launch.py``.
+* fix: ``tmrv0_2_with_sensors.urdf.xacro`` and
+  ``mobile_fr3_duo_v0_2_with_sensors.urdf.xacro`` no longer add the fixed
+  ``base`` -> ``base_link`` root. The tree starts at ``base_link``, which
+  leaves ``base`` -> ``base_link`` to the swerve odometry. The description and
+  the Gazebo wrapper never added it, and the sensor RViz config already uses
+  ``base_link`` as its fixed frame.
+* fix: ``franka_mobile_sensors`` declares ``joint_state_publisher_gui``, which
+  its RViz launch file starts.
+* fix: ``franka_semantic_components::FrankaRobotState`` now sizes and labels the joint arrays of
+  ``FrankaRobotState`` from the arm the component is bound to, instead of from every revolute
+  joint in the global ``robot_description``. With more than seven revolute joints in the
+  description the arrays came out longer than seven, and the trailing entries were filled by
+  reading past the end of libfranka's seven-element arrays, so they carried a different quantity
+  than their joint name promised and each broadcaster labelled its own arm's data with another
+  arm's joint names. The arm's seven joints are looked up by name, so single-arm descriptions
+  with extra revolute end-effector joints are fixed as well. The message frame IDs are now
+  resolved from the same arm by name. Base-frame fields (joint states, ``o_*``) use
+  ``<arm>_link0``; on a stock single-arm launch they previously used ``base``. ``f_t_ee`` and
+  ``inertia_load`` use the flange ``<arm>_link8``, and without a gripper so do ``ee_t_k``,
+  ``k_f_ext_hat_k``, ``inertia_ee`` and ``inertia_total``; these previously used ``<arm>_link2``
+  on single-arm descriptions. This reaches ``~/current_pose`` and the other convenience topics. The
+  joint copy is additionally bounded by libfranka's seven-element arrays. A description missing
+  the arm's joints, ``link0`` or ``link8`` is rejected when the component is constructed; a
+  description missing an accelerometer frame is rejected when the message is initialized during
+  configure.
+* fix: ``FrankaHardwareInterface::read()``/``write()`` skip the cycle instead of blocking while a
+  command mode switch holds the robot (tens of milliseconds) (GitHub Issue #243).
+* fix: the first ``write()`` after a command mode switch is skipped until a fresh ``read()``.
+* fix: ``write()`` returns ERROR instead of a warning when no robot control is active.
+* fix: ``move_to_start_example_controller`` performs no ``set_parameter`` on the
+  realtime thread: ``update()`` flips an atomic flag and a 20 ms wall timer publishes
+  the ``process_finished`` parameter off the thread. Setting the parameter every
+  1 kHz cycle stalled the controller for ~337 ms when a ``ros2`` CLI participant
+  joined and tripped a ``communication_constraints_violation`` reflex.
+  ``on_configure`` resets the parameter to false synchronously; after a
+  deactivate/activate without reconfigure, the previous value may remain visible for
+  up to one publish period (~20 ms).
+* fix: ``cartesian_impedance_example_controller`` resolves its interface names from the
+  ``robot_type`` (+ ``arm_prefix``) parameters like all other examples, instead of the
+  leftover ``arm_id`` parameter. Rename ``arm_id`` to ``robot_type`` in custom configs
+  (the default ``fr3`` behaviour is unchanged); a stale ``arm_id`` override logs a
+  warning in ``on_configure``.
+* fix: ``cartesian_impedance_example_controller`` performs no controller-side heap
+  allocation on the realtime thread: the Jacobian damped pseudo-inverse uses a
+  fixed-size LDLT formulation instead of a dynamic-matrix SVD, and the demo motion
+  target lives in a realtime-side member. Behaviour is numerically unchanged.
+* feat: ``move_group.launch.py`` takes a ``robot_type`` launch argument (default ``fr3``)
+  and builds the URDF/SRDF and the joint/group names in the MoveIt configs from it, so
+  other robot types (e.g. ``fr3v2``, whose model and ``fr3v2_arm`` group ship in
+  ``franka_description``) get a working MoveIt model instead of a hardcoded ``fr3`` one.
+  ``joint_impedance_with_ik_example_controller.launch.py`` forwards ``robot_type`` from
+  the robot config file to ``move_group.launch.py``.
+
+v3.6.0 (2026-10-06)
+-------------------
+Requires libfranka >= 0.20.4 and franka_description >= 2.9.0 requires ROS 2 Jazzy
+
+* fix: polling the spine eventually killed its REST API until the TMR was
+  rebooted. Every ``~/get_position`` call ran its own request on its own
+  connection, so once the device answered slower than the poll period the
+  requests stacked up until nginx returned ``504 Gateway Time-out``. Position
+  and state are now read through a cache that keeps one request in flight,
+  serves anything younger than one ``feedback_rate`` period from memory, and
+  leaves the endpoint alone for ``retry_delay`` after a failed read. The device
+  sees at most ``feedback_rate`` requests per second per endpoint regardless of
+  how many clients call the services or subscribe to the topics.
+* feat: spine publishes ``~/position`` (``SpinePosition``) and ``~/state``
+  (``SpineState``) at ``feedback_rate``, so a continuous stream no longer
+  requires calling a service in a loop. Nothing is read while nobody is
+  subscribed.
+* feat: new spine parameter ``retry_delay`` (default 0.5 s), the pause before
+  an endpoint is retried after a failed read.
+* fix: spine ``http_timeout`` default lowered from 3 s to 2 s so a stuck read
+  is dropped before the next poll period piles onto it.
+* fix: ``move_absolute`` sampled the spine state on every feedback cycle,
+  doubling the request rate during a move. The drive stops itself on a fault
+  and this poll only reports it, so it now samples at most every 0.5 s.
+
+* fix: corrected the ips of the right and left robot.
+* fix: swerve drive controller parameters from yaml (rate limiting flag, cmd_vel topic,
+  odometry and frame settings) are picked up by the controller and refreshed on reconfigure.
+  The controller update period is inferred by ROS's period parameter. Command history and
+  the odometry seed reset on activation.
+* fix: swerve drive controller always applies the velocity clamp, including on ticks with a
+  non-positive update period where acceleration limiting holds the previous command (the
+  jerk stage continues the last step). The unreachable odometry transform guard is
+  removed and the rate-limit policy is pinned by new unit tests.
+* fix: swerve drive controller update loop is real-time safe. It takes one non-blocking
+  ``try_get()`` of the cmd_vel box per tick instead of blocking ``get()`` copies, no longer
+  writes an unused timestamp from two threads, and drops the unused hot-path logger.
+  ``detail::applyCommandLimits`` moved into the internal
+  ``franka_mobile/detail/swerve_command_limits.hpp`` with grouped limiter and state structs.
+* feat: ``FrankaCartesianPoseInterface::getCurrentOrientationAndTranslation(Eigen::Quaterniond&,
+  Eigen::Vector3d&)`` is a non-throwing, allocation-free pose read that returns ``bool``.
+* feat: ``FrankaSemanticComponentInterface::set_values(const std::array<double, N>&)``
+  overload; ``FrankaCartesianVelocityInterface::setCommand`` uses it, so no vector is built per tick.
+* fix: behavior change: a pose-read failure with closed-loop odometry now makes the swerve
+  drive controller return ERROR and be deactivated by the controller manager instead of
+  throwing.
+
 v3.5.3 (2026-09-01)
 -------------------
 Requires libfranka >= 0.20.4 and franka_description >= 2.9.0 requires ROS 2 Jazzy
@@ -43,8 +157,8 @@ Requires libfranka >= 0.20.4 and franka_description >= 2.9.0 requires ROS 2 Jazz
   topic at 1 Hz and ``std_srvs/Trigger`` services for wireless charging), with an
   internal ``franka_desk_api`` HTTPS helper used by the spine and battery clients.
 * fix: franka_hardware tests now run in isolated ROS domains to avoid possible collisions.
-* fix: fixed franka_hardware stop motion test to check for stopping_joint_positions matching the last 
-        commanded target instead of zero positions. 
+* fix: fixed franka_hardware stop motion test to check for stopping_joint_positions matching the last
+        commanded target instead of zero positions.
 * fix: tune mobile teleop velocity/acceleration limits to stay within the RCU
   2-norm bounds. Raise swerve translational limits to 0.35 m/s / 0.4 m/s^2 and
   rotational to 0.5 rad/s / 0.3 rad/s^2 in ``controllers.yaml``, rescale the xbox
@@ -57,10 +171,10 @@ Requires libfranka >= 0.20.4 and franka_description >= 2.9.0 requires ROS 2 Jazz
   ``tcp_xyz`` default. MIGRATION: pass ``tcp_xyz`` explicitly to keep the previous value; the franka
   hand is unaffected.
 * fix: **BREAKING CHANGE** thread-safe access to robot state interface (changed from RealtimeBuffer to RealtimeThreadSafeBox).
-  This fixes possible race conditions that could happen when running the broadcaster and the 
-  cartesian impedance example controller (e.g. via the `franka_semantic_components::FrankaRobotModel`) with async=true. 
+  This fixes possible race conditions that could happen when running the broadcaster and the
+  cartesian impedance example controller (e.g. via the `franka_semantic_components::FrankaRobotModel`) with async=true.
   Users of the `franka_semantic_components::FrankaRobotState` should be not impacted, only direct state interface users claiming the hardware interface.
-* fix: default thread priority for franka_hardware interface threads is now 98 (was 50) to 
+* fix: default thread priority for franka_hardware interface threads is now 98 (was 50) to
   ensure RT stability.
 * fix: recover from a ``franka::ControlException`` without restarting
   ``ros2_control_node``. ``franka_robot_state_broadcaster`` and

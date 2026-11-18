@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for spine halt, re-arm, and mid-move cancellation."""
+"""Unit tests for spine halt, re-arm, mid-move cancellation and read throttling."""
 
 import threading
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
 from franka_spine_server.spine_api import SpineMotion, SpineStatus
 from franka_spine_server.spine_api_client import SpineApiClient
-from franka_spine_server.spine_controller import SpineController
+from franka_spine_server.spine_controller import DEFAULT_RETRY_DELAY, SpineController
 
 
-def _make_controller():
+def _make_controller(feedback_rate=100.0, retry_delay=DEFAULT_RETRY_DELAY):
     """Build a controller with a mocked SpineApiClient."""
     api = MagicMock()
     api.timeout = 1.0
@@ -31,7 +32,12 @@ def _make_controller():
         'franka_spine_server.spine_controller.SpineApiClient',
         return_value=api,
     ):
-        controller = SpineController('172.16.16.10', timeout=1.0, feedback_rate=100.0)
+        controller = SpineController(
+            '172.16.16.10',
+            timeout=1.0,
+            feedback_rate=feedback_rate,
+            retry_delay=retry_delay,
+        )
     return controller, api
 
 
@@ -297,6 +303,163 @@ class TestHaltMotion(unittest.TestCase):
         self.assertIn(SpineStatus.SwitchedOn, result.error)
         self.assertNotIn('424', result.error)
         api.halt_motion.assert_not_called()
+
+
+class TestReadThrottling(unittest.TestCase):
+    """Reads must never pile up on the device, however hard clients poll."""
+
+    def test_concurrent_reads_issue_a_single_request(self):
+        controller, api = _make_controller(feedback_rate=1.0)
+        results = []
+        append_lock = threading.Lock()
+
+        def slow_read():
+            time.sleep(0.05)
+            return True, {'position': 0.42}
+
+        api.get_position.side_effect = slow_read
+
+        def poll():
+            result = controller.get_position()
+            with append_lock:
+                results.append(result)
+
+        threads = [threading.Thread(target=poll) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=2.0)
+
+        self.assertEqual(api.get_position.call_count, 1)
+        self.assertEqual(len(results), 8)
+        self.assertTrue(all(result.success for result in results))
+        self.assertTrue(all(result.position == 0.42 for result in results))
+
+    def test_repeated_reads_within_one_period_do_not_reach_the_device(self):
+        controller, api = _make_controller(feedback_rate=1.0)
+        api.get_position.return_value = (True, {'position': 0.31})
+
+        for _ in range(50):
+            self.assertTrue(controller.get_position().success)
+
+        self.assertEqual(api.get_position.call_count, 1)
+
+    def test_sample_expires_after_one_feedback_period(self):
+        controller, api = _make_controller(feedback_rate=1000.0)
+        api.get_position.return_value = (True, {'position': 0.31})
+
+        controller.get_position()
+        time.sleep(0.01)
+        controller.get_position()
+
+        self.assertEqual(api.get_position.call_count, 2)
+
+    def test_read_in_flight_serves_the_previous_sample(self):
+        controller, api = _make_controller(feedback_rate=1000.0)
+        in_flight = threading.Event()
+        release = threading.Event()
+        calls = []
+
+        def read():
+            calls.append(None)
+            if len(calls) == 1:
+                return True, {'position': 0.11}
+            in_flight.set()
+            release.wait(timeout=2.0)
+            return True, {'position': 0.22}
+
+        api.get_position.side_effect = read
+        self.assertEqual(controller.get_position().position, 0.11)
+
+        time.sleep(0.01)
+        blocked = threading.Thread(target=controller.get_position)
+        blocked.start()
+        self.assertTrue(in_flight.wait(timeout=2.0))
+
+        self.assertEqual(controller.get_position().position, 0.11)
+        self.assertEqual(api.get_position.call_count, 2)
+
+        release.set()
+        blocked.join(timeout=2.0)
+
+    def test_failed_read_is_not_retried_before_the_retry_delay(self):
+        controller, api = _make_controller(feedback_rate=1000.0, retry_delay=0.2)
+        api.get_position.return_value = (False, 'read timeout=2.0')
+
+        for _ in range(20):
+            self.assertFalse(controller.get_position().success)
+        self.assertEqual(api.get_position.call_count, 1)
+
+        time.sleep(0.25)
+        controller.get_position()
+
+        self.assertEqual(api.get_position.call_count, 2)
+
+    def test_reads_return_to_full_rate_after_recovery(self):
+        controller, api = _make_controller(feedback_rate=1000.0, retry_delay=0.05)
+        api.get_position.side_effect = [
+            (False, 'read timeout=2.0'),
+            (True, {'position': 0.4}),
+            (True, {'position': 0.4}),
+        ]
+
+        self.assertFalse(controller.get_position().success)
+        time.sleep(0.06)
+        self.assertTrue(controller.get_position().success)
+        time.sleep(0.01)
+        self.assertTrue(controller.get_position().success)
+
+        self.assertEqual(api.get_position.call_count, 3)
+
+    def test_failed_reads_are_logged_once_per_request(self):
+        controller, api = _make_controller(feedback_rate=1.0, retry_delay=5.0)
+        controller.logger = MagicMock()
+        api.get_position.return_value = (False, 'read timeout=2.0')
+
+        for _ in range(20):
+            controller.get_position()
+
+        self.assertEqual(api.get_position.call_count, 1)
+        controller.logger.error.assert_called_once()
+        self.assertIn('get_position failed', controller.logger.error.call_args[0][0])
+
+    def test_command_during_an_in_flight_read_discards_its_result(self):
+        controller, api = _make_controller(feedback_rate=1.0)
+        in_flight = threading.Event()
+        release = threading.Event()
+        reads = [SpineStatus.SwitchedOn, SpineStatus.SwitchedOff]
+
+        def blocking_state():
+            if len(reads) == 2:
+                in_flight.set()
+                release.wait(timeout=2.0)
+            return True, reads.pop(0)
+
+        api.get_state.side_effect = blocking_state
+        api.switch_off.return_value = (True, SpineStatus.SwitchedOff)
+
+        served = []
+        reader = threading.Thread(target=lambda: served.append(controller.get_state()))
+        reader.start()
+        self.assertTrue(in_flight.wait(timeout=2.0))
+
+        controller.switch_off()
+        release.set()
+        reader.join(timeout=2.0)
+
+        self.assertEqual(served[0].state, SpineStatus.SwitchedOn)
+        self.assertEqual(controller.get_state().state, SpineStatus.SwitchedOff)
+
+    def test_switch_on_invalidates_the_cached_state(self):
+        controller, api = _make_controller(feedback_rate=1.0)
+        api.get_state.return_value = (True, SpineStatus.SwitchedOff)
+        self.assertEqual(controller.get_state().state, SpineStatus.SwitchedOff)
+
+        api.switch_on.return_value = (True, SpineStatus.SwitchedOn)
+        api.get_state.return_value = (True, SpineStatus.SwitchedOn)
+        controller.switch_on()
+
+        self.assertEqual(controller.get_state().state, SpineStatus.SwitchedOn)
 
 
 if __name__ == '__main__':

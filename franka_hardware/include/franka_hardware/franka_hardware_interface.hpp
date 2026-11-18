@@ -91,6 +91,13 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
   static const size_t kNumberOfJoints = 7;
 
+ protected:
+  /**
+   * @return ControlInterface The active command mode. Not thread-safe: call it only from the
+   *   thread running read(), write() or perform_command_mode_switch(), never concurrently.
+   */
+  ControlInterface getActiveMode() const;
+
  private:
   struct InterfaceInfo {
     std::string interface_type;
@@ -109,6 +116,7 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   // controller has claimed yet still reads back a finite value on the next write() cycle instead
   // of hardware_interface::Handle's own NaN default for an unset double.
   void SeedCommandInterfaces();
+  hardware_interface::return_type readHoldingControlMutex();
 
   // Support Franka ros2 control interface version
   const int kSupportedControlInterfaceMajor = 1;
@@ -200,9 +208,13 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   bool velocity_cartesian_interface_claimed_ = false;
   bool pose_cartesian_interface_claimed_ = false;
   bool elbow_command_interface_claimed_ = false;
- 
-  size_t consecutive_skips_ = 0;
-  static rclcpp::Logger getLogger();
+
+  // Cached: constructing a logger allocates, and read()/write() log on the real-time path.
+  rclcpp::Logger logger_{rclcpp::get_logger("FrankaHardwareInterface")};
+
+  // Guarded by control_mutex_. Skips write() until a fresh read() follows the switch; async
+  // controllers may still send one command computed from the pre-switch sample.
+  bool stale_after_switch_{false};
 
   std::string robot_ip_;
   std::string robot_type_{"fr3"};
