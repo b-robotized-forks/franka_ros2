@@ -418,3 +418,23 @@ TEST(FrankaRobotStateStandaloneTest, givenDescriptionWithoutHandTcp_thenFramesFa
   EXPECT_EQ(message.inertia_load.header.frame_id, "fr3_link8");
   EXPECT_EQ(message.inertia_total.header.frame_id, "fr3_link8");
 }
+
+// A description can name the joints and links with an arm prefix that differs from the state
+// interface prefix, for example joints "left_joint1" and the interface "left_fr3/robot_state".
+TEST(FrankaRobotStateStandaloneTest, givenArmPrefix_thenJointsAndFramesUseArmPrefix) {
+  auto robot_description = read_robot_description("franka_semantic_components");
+  for (auto pos = robot_description.find("fr3_"); pos != std::string::npos;
+       pos = robot_description.find("fr3_", pos)) {
+    robot_description.replace(pos, 4, "left_");
+  }
+  franka_semantic_components::FrankaRobotState franka_state("left_fr3/robot_state",
+                                                            robot_description, "left_");
+  franka_msgs::msg::FrankaRobotState message;
+  franka_state.initialize_robot_state_msg(message);
+
+  EXPECT_EQ(franka_state.get_state_interface_names().front(), "left_fr3/robot_state");
+  ASSERT_EQ(message.measured_joint_state.name.size(), 7u);
+  EXPECT_EQ(message.measured_joint_state.name.front(), "left_joint1");
+  EXPECT_EQ(message.measured_joint_state.name.back(), "left_joint7");
+  EXPECT_EQ(message.o_t_ee.header.frame_id, "left_link0");
+}

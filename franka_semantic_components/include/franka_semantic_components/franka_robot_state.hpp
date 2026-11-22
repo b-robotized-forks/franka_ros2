@@ -29,7 +29,15 @@ namespace franka_semantic_components {
 class FrankaRobotState
     : public semantic_components::SemanticComponentInterface<franka_msgs::msg::FrankaRobotState> {
  public:
-  explicit FrankaRobotState(const std::string& name, const std::string& robot_description);
+  /**
+   * \param name Robot state interface name, "<robot name>/robot_state". Empty: the URDF name.
+   * \param robot_description URDF with this arm.
+   * \param arm_prefix Prefix of this arm's joint and link names, for example "left_" for
+   * "left_joint1". Used only when robot_description has no "<robot name>_joint1".
+   */
+  explicit FrankaRobotState(const std::string& name,
+                            const std::string& robot_description,
+                            const std::string& arm_prefix = "");
 
   virtual ~FrankaRobotState() = default;
 
@@ -83,6 +91,8 @@ class FrankaRobotState
 
   std::string robot_description_;
   std::string robot_name_;
+  // Prefix of this arm's joint and link names in the robot description.
+  std::string arm_prefix_;
   const std::string state_interface_name_{"robot_state"};
   std::string full_robot_state_interface_name_;
   bool gripper_loaded_{false};

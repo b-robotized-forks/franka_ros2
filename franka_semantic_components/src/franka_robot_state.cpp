@@ -31,7 +31,7 @@ constexpr size_t kAccelerometerCount = 6;
 // libfranka reports exactly this many joints per arm; every std::array in
 // franka::RobotState that this component copies from is this wide.
 constexpr size_t kJointCount = 7;
-const std::string kTCPFrameName = "_hand_tcp";
+const std::string kTCPFrameName = "hand_tcp";
 
 // franka::RobotMode and FrankaRobotState.robot_mode are intentionally isomorphic.
 // Keep the hot path as a single cast; fail the build if libfranka or the .msg drifts.
@@ -70,7 +70,9 @@ bit_cast(const From& src) noexcept {
 
 namespace franka_semantic_components {
 
-FrankaRobotState::FrankaRobotState(const std::string& name, const std::string& robot_description)
+FrankaRobotState::FrankaRobotState(const std::string& name,
+                                   const std::string& robot_description,
+                                   const std::string& arm_prefix)
     : SemanticComponentInterface(name, 1), model_(std::make_shared<urdf::Model>()) {
   robot_description_ = robot_description;
   if (!model_->initString(robot_description_)) {
@@ -88,6 +90,12 @@ FrankaRobotState::FrankaRobotState(const std::string& name, const std::string& r
     }
   }
   full_robot_state_interface_name_ = robot_name_ + "/" + state_interface_name_;
+  // Joint and link names are "<robot name>_joint1" (upstream description) or, for a description
+  // with only the arm prefix, "<arm_prefix>joint1".
+  arm_prefix_ = robot_name_ + "_";
+  if (!arm_prefix.empty() && !model_->getJoint(arm_prefix_ + "joint1")) {
+    arm_prefix_ = arm_prefix;
+  }
   interface_names_.emplace_back(full_robot_state_interface_name_);
 
   gripper_loaded_ = is_gripper_loaded();
@@ -98,11 +106,11 @@ FrankaRobotState::FrankaRobotState(const std::string& name, const std::string& r
   // The robot_description may describe more than one arm, so the base and flange frames are
   // resolved from the bound arm by name, the same way the joints are. A description that does
   // not contain them is rejected here, at construction.
-  base_link_index_ = get_link_index(robot_name_ + "_link0");
-  flange_link_index_ = get_link_index(robot_name_ + "_link8");
+  base_link_index_ = get_link_index(arm_prefix_ + "link0");
+  flange_link_index_ = get_link_index(arm_prefix_ + "link8");
 
   if (gripper_loaded_) {
-    kEndEffectorLinkIndex = get_link_index(robot_name_ + kTCPFrameName);
+    kEndEffectorLinkIndex = get_link_index(arm_prefix_ + kTCPFrameName);
     kStiffnessLinkIndex = kEndEffectorLinkIndex;
   } else {
     kEndEffectorLinkIndex = flange_link_index_;
@@ -121,7 +129,7 @@ auto FrankaRobotState::get_link_index(const std::string& link_name) -> size_t {
 
 auto FrankaRobotState::is_gripper_loaded() -> bool {
   const auto& links = model_->links_;
-  bool gripper_loaded = links.find(robot_name_ + kTCPFrameName) != links.end();
+  bool gripper_loaded = links.find(arm_prefix_ + kTCPFrameName) != links.end();
 
   return gripper_loaded;
 }
@@ -163,7 +171,7 @@ auto FrankaRobotState::set_joints_from_urdf() -> void {
   // accelerometer frames are resolved in initialize_robot_state_msg().
   joint_names.reserve(kJointCount);
   for (size_t i = 0; i < kJointCount; ++i) {
-    const auto joint_name = robot_name_ + "_joint" + std::to_string(i + 1);
+    const auto joint_name = arm_prefix_ + "joint" + std::to_string(i + 1);
     if (model_->joints_.find(joint_name) == model_->joints_.end()) {
       throw std::runtime_error("Joint '" + joint_name + "' not found in URDF.");
     }

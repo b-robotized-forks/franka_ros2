@@ -228,6 +228,16 @@ TEST(TestFrankaRobotStateBroadcasterRealPath, mismatched_prefix_fails_configurat
             controller_interface::CallbackReturn::ERROR);
 }
 
+// A description can name the joints and links with the arm prefix only ("fr3_joint1"), while
+// the hardware exports "<arm_prefix>_<robot_type>/robot_state" ("fr3_fr3/robot_state").
+TEST(TestFrankaRobotStateBroadcasterRealPath, arm_prefix_only_description_configures_successfully) {
+  auto broadcaster = makeRealBroadcaster("fr3", "fr3", armUrdfWithSensors("fr3"));
+
+  EXPECT_EQ(broadcaster->on_init(), controller_interface::CallbackReturn::SUCCESS);
+  EXPECT_EQ(broadcaster->on_configure(rclcpp_lifecycle::State()),
+            controller_interface::CallbackReturn::SUCCESS);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);
